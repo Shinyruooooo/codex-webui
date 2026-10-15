@@ -28,7 +28,7 @@
 3. **File Workspace, `@` Mentions & Session Productivity**:
    - Built-in workspace file tree (`/api/files/tree`), safe file preview (`/api/files/preview`), and attachment upload (`/api/files/upload` with paste/drag-and-drop).
    - Pi Web-style `@` file mention autocomplete with immediate directory listing, `@folder/` trailing-slash drilldown, quoted paths, and hover `@` quick-mention in the file tree.
-   - Per-session draft persistence, IME composition `Enter` protection, thread rename, context compaction (`/compact`), and Markdown/JSON export.
+   - Per-session draft persistence, IME composition `Enter` protection, thread rename, context compaction (`/compact`), Markdown/JSON export, and full KaTeX math rendering for both `$...$` / `$$...$$` and `\(...\)` / `\[...\]` delimiters.
 4. **Security Audit Remediation & Hardening**:
    - All actionable findings from the read-only security and code quality audit have been resolved and verified by automated tests.
 

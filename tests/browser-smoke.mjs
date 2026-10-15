@@ -26,8 +26,8 @@ await page.click('#folderDialog .folder-item');
 await page.click('#folderConfirm');
 const nextWorkspaceName=await page.locator('#projectName').textContent();
 const nextHeading=await page.locator('#emptyState h1').textContent();
-await page.evaluate(()=>{const root=document.querySelector('#conversation');root.innerHTML=`<div class="message-text" id="smokeMarkdown">${globalThis.__renderAssistantMarkdown(['## Formula','','Inline $E=mc^2$','','```js','const x = 1;','```'].join(String.fromCharCode(10)))}</div>`});
-await page.waitForFunction(() => Boolean(document.querySelector('#smokeMarkdown h2') && document.querySelector('#smokeMarkdown .katex') && document.querySelector('#smokeMarkdown pre code')));
+await page.evaluate(()=>{const root=document.querySelector('#conversation');root.innerHTML=`<div class="message-text" id="smokeMarkdown">${globalThis.__renderAssistantMarkdown(['## Formula','','Inline $E=mc^2$ and \\(1/\\eta\\)','','\\[','D_a(E) = \\frac{1}{6}','\\]','','```js','const x = 1;','```'].join(String.fromCharCode(10)))}</div>`});
+await page.waitForFunction(() => document.querySelectorAll('#smokeMarkdown .katex').length >= 3 && Boolean(document.querySelector('#smokeMarkdown .katex-display') && document.querySelector('#smokeMarkdown h2') && document.querySelector('#smokeMarkdown pre code')));
 const markdown=await page.evaluate(() => ({
   heading:document.querySelectorAll('#smokeMarkdown h2').length,
   katex:document.querySelectorAll('#smokeMarkdown .katex').length,

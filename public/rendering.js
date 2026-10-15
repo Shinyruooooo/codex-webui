@@ -204,15 +204,22 @@ export function renderItemImages(item = {}, { cwd = "", className = "message-ima
 }
 
 function renderMath(source, protectedBlocks = []) {
+  const renderFormula = (formula, displayMode) => katex.renderToString(formula.trim(), {
+    displayMode,
+    throwOnError: false,
+    strict: "ignore",
+  });
   let text = source.replace(/```([\w+-]*)\n([\s\S]*?)```/g, (_, lang, code) => stash(
     protectedBlocks,
     `<pre><code class="language-${escapeHtml(lang || "text")}">${escapeHtml(code.replace(/\n$/, ""))}</code></pre>`,
   ));
   text = text.replace(/`([^`\n]+)`/g, (_, code) => stash(protectedBlocks, `<code>${escapeHtml(code)}</code>`));
-  text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, formula) => stash(protectedBlocks, katex.renderToString(formula.trim(), { displayMode: true, throwOnError: false, strict: "ignore" })));
+  text = text.replace(/\\\[([\s\S]+?)\\\]/g, (_, formula) => stash(protectedBlocks, renderFormula(formula, true)));
+  text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, formula) => stash(protectedBlocks, renderFormula(formula, false)));
+  text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, formula) => stash(protectedBlocks, renderFormula(formula, true)));
   text = text.replace(/(^|[^\\\w])\$([^$\n]+?)\$(?!\d)/g, (whole, prefix, formula) => {
     if (/^\d+(?:\.\d+)?(?:\s|$)/.test(formula.trim())) return whole;
-    return prefix + stash(protectedBlocks, katex.renderToString(formula.trim(), { displayMode: false, throwOnError: false, strict: "ignore" }));
+    return prefix + stash(protectedBlocks, renderFormula(formula, false));
   });
   return { text, protectedBlocks };
 }

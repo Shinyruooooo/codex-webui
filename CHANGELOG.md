@@ -39,6 +39,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Scoped unread completion dots strictly to background completions and cleared `unreadCompletedThreads` immediately when opening a thread.
 - **Task Notification Toggle Feedback**:
   - Updated `#settingsTaskNotifyToggle` / `#settingsTaskNotifyRow` so clicking the toggle on insecure HTTP or browsers without the `Notification` API displays an explicit toast and description explaining the HTTPS / `localhost` requirement instead of silently doing nothing.
+- **LaTeX Math Delimiter Support (`\(...\)` & `\[...\]`)**:
+  - Updated `renderMath()` in `public/rendering.js` to support standard LaTeX inline (`\(...\)`) and display (`\[...\]`) math delimiters emitted by Codex models, in addition to `$...$` and `$$...$$`, preventing Markdown from stripping backslashes in formulas.
 - **Process & Workspace Root Resilience**:
   - Added `child.on("error")` handling and fallback `spawnCwd` validation in `startCodex()` (`server.ts`) so missing binaries or invalid working directories trigger clean disconnect states and backoff retries instead of crashing the server process.
   - Included `defaultCwd` and `reviewRoots` in `browseRoots` so custom `CODEX_WEBUI_CWD` paths outside `$HOME` work consistently across file tree, search, upload, and workspace context APIs.

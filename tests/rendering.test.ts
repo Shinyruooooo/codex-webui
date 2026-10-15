@@ -14,6 +14,14 @@ describe("assistant Markdown and LaTeX rendering", () => {
     const html = renderAssistantMarkdown("Inline $E=mc^2$ and display:\n\n$$\\int_0^1 x^2 dx$$");
     expect(html).toContain('class="katex"');
     expect(html).toContain('class="katex-display"');
+
+    const standardDelimiters = renderAssistantMarkdown(
+      "零频对角项满足 \\(1/\\eta\\) 标度，扩散系数：\n\n\\[\nD_a(E)=\\frac{1}{6}\\lim_{\\tau\\to\\infty}\\frac{d}{d\\tau}\\langle |\\mathbf r(\\tau)-\\mathbf r(0)|^2\\rangle\n\\]",
+    );
+    expect(standardDelimiters).toContain('class="katex"');
+    expect(standardDelimiters).toContain('class="katex-display"');
+    expect(standardDelimiters).not.toContain("\\(1/\\eta\\)");
+    expect(standardDelimiters).not.toContain("\\[");
   });
 
   test("does not allow raw script or javascript links", () => {

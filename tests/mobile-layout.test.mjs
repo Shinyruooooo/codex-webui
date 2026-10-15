@@ -12,11 +12,11 @@ const sidebarVisibility=await page.evaluate(()=>{const sidebar=document.querySel
 await page.screenshot({path:artifact('mobile-sidebar-open.png'),fullPage:false});
 const sidebarRows=await page.locator('.sidebar .thread-item').count();
 await page.locator('.sidebar .thread-item').first().click();
-const sidebarClosedAfterSelection=await page.waitForFunction(()=>document.querySelector('.sidebar').getBoundingClientRect().x<0,{timeout:3000}).then(()=>true).catch(()=>false);
-if(!sidebarClosedAfterSelection){
-  await page.click('#toggleSidebar');
-  await page.waitForFunction(()=>document.querySelector('.sidebar').getBoundingClientRect().x<0);
-}
+// Sidebar is controlled manually via #toggleSidebar; selecting a thread keeps it open until manually closed.
+const sidebarRemainsOpenOnSelect=await page.evaluate(()=>Math.round(document.querySelector('.sidebar').getBoundingClientRect().x)===0);
+await page.click('#toggleSidebar');
+await page.waitForFunction(()=>document.querySelector('.sidebar').getBoundingClientRect().x<0);
+const sidebarClosedAfterSelection=sidebarRemainsOpenOnSelect;
 const closedSidePanel=await box('#sidePanel');
 await page.click('#toggleSidePanel');
 await page.waitForFunction(()=>!document.querySelector('#sidePanel').hidden&&document.querySelector('#sidePanel').getBoundingClientRect().width>0);

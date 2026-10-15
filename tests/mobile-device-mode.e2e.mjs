@@ -16,22 +16,30 @@ const before=await page.evaluate(()=>({
   coarse:matchMedia('(pointer: coarse)').matches,
   mobileClass:document.documentElement.classList.contains('mobile-device'),
   sidebarX:document.querySelector('#sidebar').getBoundingClientRect().x,
+  sidebarWidth:document.querySelector('#sidebar').getBoundingClientRect().width,
+  mainX:document.querySelector('.conversation-shell').getBoundingClientRect().x,
   sidebarPosition:getComputedStyle(document.querySelector('#sidebar')).position,
-  sidebarShadow:getComputedStyle(document.querySelector('#sidebar')).boxShadow,
+  bodyHidden:document.body.classList.contains('sidebar-hidden'),
 }));
 await page.click('#toggleSidebar');
-await page.waitForFunction(()=>Math.abs(document.querySelector('#sidebar').getBoundingClientRect().x)<.5);
-const after=await page.evaluate(()=>{const sidebar=document.querySelector('#sidebar'),rect=sidebar.getBoundingClientRect();return{
+await page.waitForFunction(()=>document.querySelector('#sidebar').getBoundingClientRect().width===0);
+const closed=await page.evaluate(()=>({
+  sidebarWidth:document.querySelector('#sidebar').getBoundingClientRect().width,
+  mainX:document.querySelector('.conversation-shell').getBoundingClientRect().x,
+  bodyHidden:document.body.classList.contains('sidebar-hidden'),
+}));
+await page.click('#toggleSidebar');
+await page.waitForFunction(()=>document.querySelector('#sidebar').getBoundingClientRect().width===275);
+await page.click('.thread-item');
+const after=await page.evaluate(()=>{const sidebar=document.querySelector('#sidebar'),rect=sidebar.getBoundingClientRect(),mainRect=document.querySelector('.conversation-shell').getBoundingClientRect();return{
   x:rect.x,
   right:rect.right,
   width:rect.width,
-  mobileOpen:sidebar.classList.contains('mobile-open'),
+  mainX:mainRect.x,
   bodyHidden:document.body.classList.contains('sidebar-hidden'),
   position:getComputedStyle(sidebar).position,
-  shadow:getComputedStyle(sidebar).boxShadow,
-  topElement:document.elementFromPoint(Math.min(rect.right-10,innerWidth-10),Math.min(rect.top+20,innerHeight-10))?.closest('#sidebar')===sidebar,
 }});
 await page.screenshot({path:artifact('mobile-device-sidebar.png'),fullPage:false});
-console.log(JSON.stringify({before,after},null,2));
+console.log(JSON.stringify({before,closed,after},null,2));
 await browser.close();
-if(!before.coarse||!before.mobileClass||before.sidebarPosition!=='fixed'||before.sidebarX>=0||before.sidebarShadow!=='none'||!after.mobileOpen||after.bodyHidden||Math.abs(after.x)>.5||after.width>948||after.shadow==='none'||!after.topElement)process.exit(1);
+if(!before.coarse||!before.mobileClass||before.sidebarPosition==='fixed'||before.sidebarWidth!==275||before.mainX!==275||before.bodyHidden||closed.sidebarWidth!==0||closed.mainX!==0||!closed.bodyHidden||after.bodyHidden||after.width!==275||after.mainX!==275)process.exit(1);

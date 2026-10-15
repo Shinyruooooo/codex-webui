@@ -109,12 +109,14 @@ async function createClient(browser, name, origin, notificationMode, mobile) {
 async function verifyClient(client, mobile, notificationsUnavailable) {
   const { name, page, methods, errors, initial } = client;
   await page.waitForFunction(() => globalThis.__codexWebuiDebug?.state.models.length > 0);
+  const narrow = await page.evaluate(() => innerWidth < 720);
   await page.locator('#toggleSidebar').click();
-  if (mobile) {
+  if (narrow) {
     await page.waitForFunction(() => document.querySelector('#sidebar').classList.contains('mobile-open'));
   } else {
     await page.waitForFunction(() => document.body.classList.contains('sidebar-hidden'));
     await page.locator('#toggleSidebar').click();
+    await page.waitForFunction(() => !document.body.classList.contains('sidebar-hidden'));
   }
   await page.locator('.thread-item').click();
   await page.waitForFunction(() => document.querySelector('#conversation').textContent.includes('Saved history fixture'));
@@ -124,11 +126,9 @@ async function verifyClient(client, mobile, notificationsUnavailable) {
   await page.locator('#modeButton').click();
   assert.equal(await page.locator('#permissionMenu').isVisible(), true, `${name}: permission menu unresponsive`);
   await page.keyboard.press('Escape');
-  if (mobile) await page.locator('#toggleSidebar').click();
   await page.locator('#accountButton').click();
   await page.waitForSelector('#settingsDialog[open]');
-  if (mobile) {
-    // The existing settings surface does not close the mobile sidebar itself.
+  if (narrow) {
     await page.locator('#toggleSidebar').click();
     await page.waitForFunction(() => !document.querySelector('#sidebar').classList.contains('mobile-open'));
   }

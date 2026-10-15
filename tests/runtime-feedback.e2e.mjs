@@ -147,13 +147,14 @@ try{
   await p.screenshot({path:artifact('runtime-feedback-ipad.png')});
   reports.push({scenario:'immediate-send-stream-usage',feedbackMs,tokens:await p.locator('#runtimeTokenSummary').textContent(),errors:f.errors});
   // A background approval is retained, not discarded, and reappears on selection.
-  await p.locator('#toggleSidebar').tap();
-  // Clicking the completed background thread clears its unread dot on first entry.
+  // Clicking the completed background thread clears its unread dot on first entry,
+  // and keeps the docked sidebar open until the user manually toggles it.
   await p.locator('[data-id="cli-thread"]').tap();
   await p.waitForFunction(()=>globalThis.__codexWebuiDebug.state.active?.id==='cli-thread');
   assert.equal(await p.locator('.thread-item[data-id="cli-thread"]').getAttribute('data-thread-status'),'idle');
   assert.equal(await p.locator('.thread-item[data-id="cli-thread"] .thread-status-dot.is-completed').count(),0);
-  await p.locator('#toggleSidebar').tap();await p.locator('[data-id="other-thread"]').tap();
+  assert.equal(await p.evaluate(()=>document.body.classList.contains('sidebar-hidden')),false);
+  await p.locator('[data-id="other-thread"]').tap();
   await p.waitForSelector('[data-codex-approval-surface]');
   await p.locator('.approval-deny').tap();
   await p.waitForFunction(()=>!document.querySelector('[data-codex-approval-surface]'));

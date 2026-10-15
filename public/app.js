@@ -593,12 +593,15 @@ function threadVisualStatus(thread){
   if(unreadCompletedThreads.has(id))return'completed';
   return'idle';
 }
+const sidebarProjectOrder=[];
 function renderThreads(){
-  const list=$('#threadList'),q=$('#threadSearch').value.trim().toLowerCase(),groups=new Map;list.innerHTML='';
+  const list=$('#threadList'),prevScrollTop=list.scrollTop,q=$('#threadSearch').value.trim().toLowerCase(),groups=new Map;list.innerHTML='';
   for(const thread of state.threads){if(q&&!titleOf(thread).toLowerCase().includes(q)&&!thread.cwd?.toLowerCase().includes(q))continue;const key=sidebarProjectKey(thread),group=groups.get(key)||{key,threads:[],recency:0};group.threads.push(thread);group.recency=Math.max(group.recency,Number(thread.recencyAt||thread.updatedAt)||0);groups.set(key,group)}
-  const currentKey=currentSidebarProjectKey(),ordered=[...groups.values()].sort((a,b)=>(a.key===currentKey?-1:b.key===currentKey?1:b.recency-a.recency));
+  for(const group of [...groups.values()].sort((a,b)=>b.recency-a.recency))if(!sidebarProjectOrder.includes(group.key))sidebarProjectOrder.push(group.key);
+  const ordered=[...groups.values()].sort((a,b)=>sidebarProjectOrder.indexOf(a.key)-sidebarProjectOrder.indexOf(b.key));
   for(const group of ordered){
-    const containsActive=group.threads.some(thread=>thread.id===state.active?.id),expanded=Boolean(q)||(Object.hasOwn(sidebarProjectExpansion,group.key)?sidebarProjectExpansion[group.key]:containsActive||group.key===currentKey||ordered.length===1),section=document.createElement('section');
+    if(!Object.hasOwn(sidebarProjectExpansion,group.key))sidebarProjectExpansion[group.key]=true;
+    const expanded=Boolean(q)||Boolean(sidebarProjectExpansion[group.key]),section=document.createElement('section');
     section.className='sidebar-project-group';section.dataset.project=group.key;
     const states=group.threads.map(threadVisualStatus),groupDot=states.includes('running')?'is-running':states.includes('approval')?'is-approval':states.includes('completed')?'is-completed':'';
     const heading=document.createElement('button');heading.type='button';heading.className='sidebar-project-row';heading.setAttribute('aria-expanded',String(expanded));heading.title=group.key==='__tasks__'?t('Tasks'):shortPath(group.key);
@@ -630,6 +633,7 @@ function renderThreads(){
     section.append(threads);list.append(section);
   }
   if(!list.children.length)list.innerHTML='<div class="list-state">No matching tasks</div>';
+  list.scrollTop=prevScrollTop;
 }
 async function openThread(id,fallbackSummary=null){
   unreadCompletedThreads.delete(id);
@@ -957,10 +961,18 @@ async function submitPrompt(event){
 }
 function threadSummarySignature(threads){return JSON.stringify(threads.map(thread=>[thread.id,thread.updatedAt,thread.recencyAt,thread.status,thread.liveActive,thread.liveLastTurnId,thread.liveLastTurnStatus]))}
 function applyThreadSummaries(threads){
-  const hadPrevious=state.threadsLoaded,previousById=new Map(state.threads.map(thread=>[thread.id,thread]));
+  const hadPrevious=state.threadsLoaded,previousById=new Map(state.threads.map(thread=>[thread.id,thread])),previousOrder=state.threads.map(thread=>thread.id);
   const nextSignature=threadSummarySignature(threads),changed=nextSignature!==threadListSignature;
-  threadListSignature=nextSignature;state.threads=threads;
-  for(const thread of threads){
+  threadListSignature=nextSignature;
+  if(hadPrevious){
+    const incomingById=new Map(threads.map(thread=>[thread.id,thread]));
+    const newThreads=threads.filter(thread=>!previousById.has(thread.id));
+    const keptThreads=previousOrder.map(id=>incomingById.get(id)).filter(Boolean);
+    state.threads=[...newThreads,...keptThreads];
+  }else{
+    state.threads=threads;
+  }
+  for(const thread of state.threads){
     const prev=previousById.get(thread.id),run=threadRuns.get(thread.id),wasRunning=Boolean(prev?.status?.type==='active'||prev?.liveActive||RUNNING_PHASES.has(run?.phase)),nowRunning=Boolean(thread.status?.type==='active'||thread.liveActive);
     if(!nowRunning&&RUNNING_PHASES.has(run?.phase)&&pendingSubmission?.threadId!==thread.id&&![...pendingApprovals.values()].some(req=>req.params?.threadId===thread.id)){
       const terminalPhase=thread.liveLastTurnStatus==='failed'?'failed':thread.liveLastTurnStatus==='interrupted'?'stopped':'completed';
@@ -969,7 +981,7 @@ function applyThreadSummaries(threads){
       unreadCompletedThreads.add(thread.id);
     }
   }
-  const summary=state.active&&threads.find(thread=>thread.id===state.active.id);
+  const summary=state.active&&state.threads.find(thread=>thread.id===state.active.id);
   if(summary){const turns=state.active.turns;state.active={...state.active,...summary,turns};if(summary.status?.type==='active'||summary.liveActive)scheduleActiveThreadSync(0)}
   if(changed)renderThreads();
 }

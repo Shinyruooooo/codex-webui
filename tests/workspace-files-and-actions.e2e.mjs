@@ -84,11 +84,13 @@ try {
     {
       id: 'thread-beta',
       name: 'Beta session',
-      cwd: workspaceDir,
+      cwd: `${workspaceDir}-other`,
+      recencyAt: 100,
       canAcceptDirectInput: true,
       turns: [],
     },
   ];
+  threads[0].recencyAt = 200;
   const rpcCalls = [];
   await context.routeWebSocket(`ws://127.0.0.1:${port}/ws`, ws => {
     ws.onMessage(raw => {
@@ -177,7 +179,10 @@ try {
   assert.ok(converged.runtimeSummaryText?.includes('Weekly: 97%'));
   assert.ok(converged.runtimeDetailsHtml.includes('Remaining quota'));
 
-  // 2. Per-session draft persistence across new chat and existing threads.
+  // 2. Per-session draft persistence across new chat and existing threads,
+  // and sidebar project group / thread order remains fixed when clicking between sessions.
+  const initialProjectOrder = await page.evaluate(() => [...document.querySelectorAll('.sidebar-project-group')].map(el => el.dataset.project));
+  const initialThreadOrder = await page.evaluate(() => [...document.querySelectorAll('.thread-item')].map(el => el.dataset.id));
   await page.locator('#prompt').fill('Draft for a brand new task');
   await page.click('.thread-item[data-id="thread-alpha"]');
   await page.waitForFunction(() => globalThis.__codexWebuiDebug.state.active?.id === 'thread-alpha');
@@ -185,6 +190,14 @@ try {
   await page.locator('#prompt').fill('Draft specifically for alpha');
   await page.click('.thread-item[data-id="thread-beta"]');
   await page.waitForFunction(() => globalThis.__codexWebuiDebug.state.active?.id === 'thread-beta');
+  assert.deepEqual(
+    await page.evaluate(() => [...document.querySelectorAll('.sidebar-project-group')].map(el => el.dataset.project)),
+    initialProjectOrder,
+  );
+  assert.deepEqual(
+    await page.evaluate(() => [...document.querySelectorAll('.thread-item')].map(el => el.dataset.id)),
+    initialThreadOrder,
+  );
   assert.equal(await page.locator('#prompt').inputValue(), '');
   await page.click('.thread-item[data-id="thread-alpha"]');
   await page.waitForFunction(() => globalThis.__codexWebuiDebug.state.active?.id === 'thread-alpha');

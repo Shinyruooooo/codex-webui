@@ -133,10 +133,14 @@ async function verifyClient(client, mobile, notificationsUnavailable) {
     await page.waitForFunction(() => !document.querySelector('#sidebar').classList.contains('mobile-open'));
   }
   const toggle = page.locator('#settingsTaskNotifyToggle');
-  assert.equal(await toggle.isDisabled(), notificationsUnavailable, `${name}: notification capability not reflected in UI`);
+  assert.equal(await toggle.getAttribute('data-unsupported'), String(notificationsUnavailable), `${name}: notification capability not reflected in UI`);
   if (notificationsUnavailable) {
     assert.equal(await toggle.isChecked(), false);
     assert.ok(await toggle.getAttribute('title'), `${name}: unavailable notification setting has no explanation`);
+    assert.ok((await page.locator('#settingsTaskNotifyDescription').textContent())?.includes('HTTPS'), `${name}: description did not explain HTTPS/localhost requirement`);
+    await page.locator('#settingsTaskNotifyRow').click();
+    assert.equal(await toggle.isChecked(), false);
+    await page.waitForFunction(() => document.querySelector('#toast')?.textContent?.includes('HTTPS'));
   } else {
     // Exercise both the settings handler and permission requests, including
     // denied/synchronously throwing/asynchronously rejecting implementations.

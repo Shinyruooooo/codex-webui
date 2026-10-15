@@ -75,11 +75,13 @@ const reports=[];
 try{
   // New session: user sees their prompt and local preparation before thread/start replies.
   const f=await fixture(browser,true),p=f.page;
-  assert.equal(await p.locator('#runtimeTokenSummary').textContent(),'Tokens: —');
+  assert.equal(await p.locator('#runtimeTokenSummary').textContent(),'—');
   await p.locator('#prompt').fill('Show immediate feedback');
   const started=Date.now();await p.locator('#sendButton').tap();
   assert.equal(await p.locator('.user-message').textContent(),'Show immediate feedback');
   assert.equal(await p.locator('#runtimeStatus').textContent(),'Preparing session…');
+  assert.equal(await p.locator('#runtimeStatus').evaluate(node=>node.classList.contains('sr-only')),true);
+  assert.equal(await p.locator('#runtimeStatusIcon svg').count(),1);
   const feedbackMs=Date.now()-started;assert.ok(feedbackMs<1000,`Local feedback took ${feedbackMs}ms`);
   assert.equal(await p.locator('#sendButton').isDisabled(),true);
   await p.evaluate(()=>{document.querySelector('#composer').requestSubmit();document.querySelector('#composer').requestSubmit()});
@@ -90,6 +92,8 @@ try{
   assert.equal(await p.locator('#runtimeStatus').textContent(),'Sending to Codex…');
   f.release('turn/start',{turn:{id:'new-turn',status:'inProgress'}});
   await p.waitForFunction(()=>document.querySelector('#runtimeStatus').textContent==='Waiting for Codex…');
+  assert.equal(await p.locator('.thread-item[data-id="new-thread"]').getAttribute('data-thread-status'),'running');
+  assert.equal(await p.locator('.thread-item[data-id="new-thread"] .thread-status-spinner').count(),1);
   assert.equal(await p.locator('#sendButton').isDisabled(),false);
   assert.equal(await p.locator('#sendButton').getAttribute('data-submit-mode'),'stop');
   await p.waitForFunction(()=>document.querySelector('#runtimeElapsed').textContent!=='0s');
@@ -102,7 +106,7 @@ try{
   assert.equal(await p.locator('[data-codex-approval-surface]').count(),0);
   assert.equal(f.requests.filter(r=>r.type==='codex/response'&&r.requestId===900).length,0);
   assert.equal(await p.locator('#conversation').textContent().then(t=>t.includes('FOREIGN CONTENT')),false);
-  assert.equal(await p.locator('#runtimeTokenSummary').textContent(),'Tokens: —');
+  assert.equal(await p.locator('#runtimeTokenSummary').textContent(),'—');
   f.emit('item/started',{threadId:'new-thread',turnId:'new-turn',item:{id:'reason',type:'reasoning',summary:[]}});
   await p.waitForFunction(()=>document.querySelector('#runtimeFooter').dataset.phase==='thinking');
   f.emit('item/started',{threadId:'new-thread',turnId:'new-turn',item:{id:'command',type:'commandExecution',command:'pwd'}});
@@ -114,8 +118,8 @@ try{
   f.emit('item/completed',{threadId:'new-thread',turnId:'new-turn',item:{id:'reason',type:'reasoning',status:'completed',summary:['Checked the request']}});
   f.emit('item/completed',{threadId:'new-thread',turnId:'new-turn',item:{id:'command',type:'commandExecution',status:'declined',command:'pwd'}});
   f.emit('thread/tokenUsage/updated',{threadId:'new-thread',tokenUsage:usage});
-  await p.waitForFunction(()=>document.querySelector('#runtimeTokenSummary').textContent.includes('14,500'));
-  assert.equal(await p.locator('#runtimeTokenSummary').textContent(),'Tokens: 14,500 · Context: 7%');
+  await p.waitForFunction(()=>document.querySelector('#runtimeTokenSummary').textContent.includes('↑12k'));
+  assert.equal(await p.locator('#runtimeTokenSummary').textContent(),'↑12k ↓2.5k · 7%');
   await p.locator('#runtimeTokenSummary').tap();
   assert.ok((await p.locator('#runtimeUsageDetails').textContent()).includes('9,000'));
   assert.ok((await p.locator('#runtimeUsageDetails').textContent()).includes('1,800'));
@@ -125,6 +129,8 @@ try{
   await p.waitForFunction(()=>document.querySelector('#runtimeFooter').dataset.phase==='responding');
   f.emit('turn/completed',{threadId:'new-thread',turn:{id:'new-turn',status:'completed'}});
   await p.waitForFunction(()=>document.querySelector('#runtimeFooter').dataset.phase==='completed');
+  assert.equal(await p.locator('.thread-item[data-id="new-thread"]').getAttribute('data-thread-status'),'completed');
+  assert.equal(await p.locator('.thread-item[data-id="new-thread"] .thread-status-dot.is-completed').count(),1);
   assert.equal(await p.locator('#sendButton').getAttribute('data-submit-mode'),'send');
   // Native history hydration may emit late item completions after turn/completed.
   f.emit('item/completed',{threadId:'new-thread',turnId:'new-turn',item:{id:'answer',type:'agentMessage',text:'Final answer'}});
@@ -221,7 +227,7 @@ try{
   cli.live.set('cli-thread',{active:true,tokenUsage:usage,turn:{id:'cli-turn',status:'inProgress',items:[{id:'cli-reason',type:'reasoning',status:'inProgress',summary:['CLI working']} ]}});
   await v.locator('[data-id="cli-thread"]').click();
   await v.waitForFunction(()=>document.querySelector('#runtimeFooter').dataset.phase==='thinking');
-  await v.waitForFunction(()=>document.querySelector('#runtimeTokenSummary').textContent.includes('14,500'));
+  await v.waitForFunction(()=>document.querySelector('#runtimeTokenSummary').textContent.includes('↑12k'));
   assert.equal(cli.requests.filter(x=>x.method==='thread/resume').length,0);
   assert.equal(await v.locator('#sendButton').getAttribute('data-submit-mode'),'stop');
   assert.deepEqual(cli.errors,[]);reports.push({scenario:'external-cli-status-and-usage',errors:cli.errors});

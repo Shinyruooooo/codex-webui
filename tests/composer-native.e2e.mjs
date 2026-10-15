@@ -34,18 +34,12 @@ const home=await page.evaluate(()=>{
   };
 });
 const contextUsage=await page.evaluate(()=>{
-  const api=globalThis.__codexWebuiDebug,initiallyHidden=document.querySelector('#contextUsage').hidden;
+  const api=globalThis.__codexWebuiDebug;
   api.state.active={id:'context-thread',cwd:api.state.config.defaultCwd};
-  api.notify('thread/tokenUsage/updated',{threadId:'context-thread',tokenUsage:{modelContextWindow:200000,last:{totalTokens:80000}}});
-  const indicator=document.querySelector('#contextUsage'),progress=indicator.querySelector('.context-usage-progress'),send=document.querySelector('#sendButton');
+  api.notify('thread/tokenUsage/updated',{threadId:'context-thread',tokenUsage:{modelContextWindow:200000,last:{totalTokens:80000},total:{inputTokens:60000,outputTokens:20000,totalTokens:80000}}});
   return {
-    initiallyHidden,
-    hidden:indicator.hidden,
-    ariaLabel:indicator.getAttribute('aria-label'),
-    tooltip:indicator.dataset.tooltip,
-    dashOffset:getComputedStyle(progress).strokeDashoffset,
-    inComposerRight:indicator.parentElement?.classList.contains('composer-right'),
-    beforeSend:Boolean(indicator.compareDocumentPosition(send)&Node.DOCUMENT_POSITION_FOLLOWING),
+    ringPresent:Boolean(document.querySelector('#contextUsage')),
+    runtimeSummary:document.querySelector('#runtimeTokenSummary')?.textContent?.trim(),
   };
 });
 
@@ -99,13 +93,8 @@ if(errors.length
   ||home.contextTrayHidden!==true
   ||JSON.stringify(home.controls)!==JSON.stringify(expected)
   ||!home.nativeTrigger
-  ||!contextUsage.initiallyHidden
-  ||contextUsage.hidden
-  ||contextUsage.ariaLabel!=='Context usage: 40%'
-  ||contextUsage.tooltip!=='Context window:\n40% used (60% left)\n80k / 200k tokens used'
-  ||Math.abs(parseFloat(contextUsage.dashOffset)-60)>.1
-  ||!contextUsage.inComposerRight
-  ||!contextUsage.beforeSend
+  ||contextUsage.ringPresent
+  ||!contextUsage.runtimeSummary?.includes('↑60k ↓20k · 40%')
   ||/^GPT-/i.test(home.triggerText||'')
   ||modelFilter.hasO3
   ||modelFilter.models.some(model=>!/^gpt(?:[-_.\s]|$)/i.test(model))

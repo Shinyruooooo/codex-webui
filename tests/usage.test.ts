@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { contextUsageValue, formatElapsed, formatQuotaResetCountdown, formatQuotaWindowLabel, formatTokenCount, normalizeRateLimits, normalizeTokenUsage } from "../public/usage.js";
+import { contextUsageValue, formatCompactTokenCount, formatElapsed, formatQuotaResetCountdown, formatQuotaWindowLabel, formatTokenCount, normalizeRateLimits, normalizeTokenUsage } from "../public/usage.js";
 
 const emptyGroup = {
   inputTokens: null,
@@ -94,6 +94,11 @@ describe("formatters", () => {
     expect(formatTokenCount(null)).toBe("—");
     expect(formatTokenCount(Number.NaN)).toBe("—");
     expect(formatTokenCount(-2)).toBe("—");
+    expect(formatCompactTokenCount(950)).toBe("950");
+    expect(formatCompactTokenCount(14500)).toBe("14.5k");
+    expect(formatCompactTokenCount(250000)).toBe("250k");
+    expect(formatCompactTokenCount(1250000)).toBe("1.3M");
+    expect(formatCompactTokenCount(null)).toBe("—");
   });
 
   test("formats elapsed time without wall-clock precision", () => {

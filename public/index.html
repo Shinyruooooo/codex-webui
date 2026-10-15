@@ -140,23 +140,20 @@
             </div>
           </div>
           <div class="composer-right">
-            <span class="context-usage" id="contextUsage" role="img" tabindex="0" aria-label="Context usage" hidden>
-              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                <circle class="context-usage-track" cx="6" cy="6" r="5" pathLength="100"></circle>
-                <circle class="context-usage-progress" cx="6" cy="6" r="5" pathLength="100"></circle>
-              </svg>
-            </span>
             <button type="button" class="composer-circle-button dictation-control" data-composer-control="dictation" title="Start dictation" aria-label="Start dictation" hidden><span class="icon-slot" data-icon="mic"></span></button>
             <button class="send-button" id="sendButton" data-composer-control="send" type="submit" title="Send message" aria-label="Send message"><span class="icon-slot" data-icon="arrowUp"></span></button>
           </div>
         </div>
       </form>
       <div class="runtime-footer" id="runtimeFooter" data-phase="idle">
-        <div class="runtime-status" role="status" aria-live="polite" aria-atomic="true"><span class="runtime-dot" aria-hidden="true"></span><span id="runtimeStatus">Connecting to Codex</span></div>
+        <div class="runtime-status" id="runtimeStatusPill" role="status" aria-live="polite" aria-atomic="true" title="Ready">
+          <span class="runtime-status-icon" id="runtimeStatusIcon" aria-hidden="true"></span>
+          <span class="sr-only" id="runtimeStatus">Connecting to Codex</span>
+        </div>
         <span class="runtime-elapsed" id="runtimeElapsed" hidden></span>
         <span class="runtime-hint" id="runtimeHint" hidden></span>
         <details class="runtime-usage" id="runtimeUsage">
-          <summary id="runtimeTokenSummary">Tokens: —</summary>
+          <summary id="runtimeTokenSummary">—</summary>
           <div class="runtime-usage-details" id="runtimeUsageDetails">Waiting for Codex usage data</div>
         </details>
       </div>
@@ -320,7 +317,7 @@
         <div class="settings-row"><span><strong>Project</strong><small>Working folder used for new chats</small></span><span id="settingsProjectValue"></span></div>
         <div class="settings-section-title settings-section-spaced">Notifications</div>
         <label class="settings-row settings-toggle-row" id="settingsTaskNotifyRow">
-          <span><strong>Task notifications</strong><small>Show a browser notification when a task completes</small></span>
+          <span><strong>Task notifications</strong><small id="settingsTaskNotifyDescription">Show a browser notification when a task completes</small></span>
           <input id="settingsTaskNotifyToggle" type="checkbox">
           <span class="settings-switch" aria-hidden="true"></span>
         </label>

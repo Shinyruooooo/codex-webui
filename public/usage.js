@@ -58,6 +58,21 @@ export function formatTokenCount(value) {
   return count === null ? "—" : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(count);
 }
 
+/** Format a known token count in compact human-readable form (e.g. 14.5k, 1.2M). */
+export function formatCompactTokenCount(value) {
+  const count = tokenCount(value);
+  if (count === null) return "—";
+  if (count < 1000) return String(count);
+  if (count < 1_000_000) {
+    const k = count / 1000;
+    const rounded = k >= 100 ? Math.round(k) : Math.round(k * 10) / 10;
+    return `${rounded}k`;
+  }
+  const m = count / 1_000_000;
+  const rounded = m >= 100 ? Math.round(m) : Math.round(m * 10) / 10;
+  return `${rounded}M`;
+}
+
 /** Format elapsed milliseconds using only the precision displayed by the UI. */
 export function formatElapsed(ms) {
   if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return "—";

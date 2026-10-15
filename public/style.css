@@ -750,28 +750,44 @@ body.sidebar-hidden .sidebar>div{opacity:0}
 @media(max-width:480px){.settings-card{display:block}.settings-nav,.settings-content{height:100%}.settings-nav{border-right:0;padding-inline:12px}.settings-nav-toolbar-spacer{height:10px;flex-basis:10px}.settings-content{display:none}.settings-dialog[data-mobile-page="true"] .settings-nav{display:none}.settings-dialog[data-mobile-page="true"] .settings-content{display:block}.settings-dialog[data-mobile-page="true"] .settings-mobile-back{display:inline-grid!important}.settings-page{width:100%;padding:24px 20px 36px}.settings-page-heading{margin-bottom:22px}.settings-row:not(.settings-toggle-row)>span:last-child{max-width:52%}}
 
 /* Always-visible task feedback; numeric usage comes only from Codex. */
-.runtime-footer{position:relative;display:flex;align-items:center;flex-wrap:wrap;gap:5px 10px;min-height:28px;margin:5px 4px 0;color:var(--app-text-secondary);font-size:11px;line-height:18px;min-width:0}
-.runtime-status{display:flex;align-items:center;gap:6px;min-width:0}
-.runtime-dot{width:6px;height:6px;flex:none;border-radius:50%;background:var(--app-text-tertiary)}
-.runtime-footer[data-busy=true] .runtime-dot{background:var(--app-link);animation:runtime-pulse 1.2s ease-in-out infinite}
-.runtime-footer[data-phase=approval] .runtime-dot{background:var(--warning)}
-.runtime-footer[data-phase=completed] .runtime-dot{background:var(--app-success)}
-.runtime-footer[data-phase=failed] .runtime-dot{background:var(--app-danger)}
-.runtime-elapsed{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.runtime-footer{position:relative;display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-height:22px;margin:4px 6px 0;color:var(--app-text-secondary);font-size:11px;line-height:16px;min-width:0}
+.runtime-status{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;min-width:16px;color:var(--app-text-tertiary)}
+.runtime-status-icon{width:14px;height:14px;display:inline-grid;place-items:center;line-height:0}
+.runtime-status-icon .icon-slot,.runtime-status-icon svg{width:13px;height:13px;min-width:13px}
+.runtime-status-dot{width:6px;height:6px;border-radius:50%;background:var(--app-text-tertiary)}
+.runtime-footer[data-busy=true] .runtime-status{color:var(--app-link)}
+.runtime-footer[data-busy=true] .runtime-status-icon svg{animation:browser-spin .9s linear infinite}
+.runtime-footer[data-phase=approval] .runtime-status{color:var(--warning)}
+.runtime-footer[data-phase=completed] .runtime-status{color:var(--app-success)}
+.runtime-footer[data-phase=completed] .runtime-status-dot{background:var(--app-success)}
+.runtime-footer[data-phase=failed] .runtime-status{color:var(--app-danger)}
+.runtime-elapsed{font-family:var(--mono);font-size:10.5px;color:var(--app-text-tertiary);font-variant-numeric:tabular-nums}
 .runtime-hint{color:var(--app-text-tertiary);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.runtime-usage{position:relative;margin-left:auto;font-variant-numeric:tabular-nums}
-.runtime-usage summary{cursor:pointer;list-style:none;white-space:nowrap;padding:1px 3px;border-radius:4px}
+.runtime-usage{position:relative;margin-left:auto;font:11px/16px var(--mono);color:var(--app-text-tertiary);font-variant-numeric:tabular-nums}
+.runtime-usage summary{cursor:pointer;list-style:none;white-space:nowrap;padding:1px 4px;border-radius:4px}
 .runtime-usage summary::-webkit-details-marker{display:none}
 .runtime-usage summary:hover,.runtime-usage[open] summary{background:var(--app-hover);color:var(--app-text)}
 .runtime-usage summary:focus-visible{outline:2px solid var(--app-link);outline-offset:2px}
-.runtime-usage-details{position:absolute;right:0;bottom:calc(100% + 8px);z-index:90;box-sizing:border-box;width:min(330px,calc(100vw - 28px));max-height:50vh;overflow:auto;padding:12px;border:1px solid var(--app-border-default);border-radius:9px;background:var(--app-panel);box-shadow:var(--app-elevation-shadow);color:var(--app-text-secondary);font-size:12px;line-height:1.65}
+.runtime-usage-details{position:absolute;right:0;bottom:calc(100% + 8px);z-index:90;box-sizing:border-box;width:min(330px,calc(100vw - 28px));max-height:50vh;overflow:auto;padding:12px;border:1px solid var(--app-border-default);border-radius:9px;background:var(--app-panel);box-shadow:var(--app-elevation-shadow);color:var(--app-text-secondary);font:12px/1.65 var(--ui)}
 .runtime-usage-details section+section{margin-top:10px;padding-top:8px;border-top:1px solid var(--app-border-default)}
 .runtime-usage-details strong{display:block;color:var(--app-text);font-weight:600;margin-bottom:3px}
 .runtime-usage-details dl{display:grid;grid-template-columns:1fr auto;gap:2px 14px;margin:0}
 .runtime-usage-details dt,.runtime-usage-details dd{margin:0}
 .runtime-usage-details small{display:block;margin-top:8px;color:var(--app-text-tertiary)}
+.settings-toggle-row.is-disabled{cursor:not-allowed;opacity:.62}
+.thread-meta{display:flex;flex:0 0 auto;align-items:center;justify-content:flex-end;min-width:20px;margin:0;color:var(--app-text-tertiary);font:10.5px var(--mono);font-variant-numeric:tabular-nums}
+.thread-item:hover .thread-meta:not(.is-status),.thread-item:focus-within .thread-meta:not(.is-status){display:none}
+.thread-delete{display:none}
+.thread-item:hover .thread-delete,.thread-item:focus-within .thread-delete{display:flex;opacity:1}
+.thread-status-spinner{width:12px;height:12px;display:inline-grid;place-items:center;color:var(--app-link)}
+.thread-status-spinner svg{width:12px;height:12px;animation:browser-spin .9s linear infinite}
+.thread-status-dot{position:relative;width:6px;height:6px;border-radius:50%;flex:none}
+.thread-status-dot.is-completed,.sidebar-project-dot.is-completed{background:#0891b2}
+.thread-status-dot.is-approval,.sidebar-project-dot.is-approval{background:#d97706}
+.thread-status-dot.is-running,.sidebar-project-dot.is-running{background:var(--app-link)}
+.sidebar-project-dot{width:6px;height:6px;border-radius:50%;flex:0 0 6px;margin-left:2px}
 @keyframes runtime-pulse{50%{opacity:.35}}
-@media(prefers-reduced-motion:reduce){.runtime-footer[data-busy=true] .runtime-dot{animation:none}}
+@media(prefers-reduced-motion:reduce){.runtime-footer[data-busy=true] .runtime-status-icon svg,.thread-status-spinner svg{animation:none}}
 @media(max-width:600px){.runtime-footer{gap:3px 8px;font-size:10px}.runtime-hint{flex-basis:100%;order:3}.runtime-usage-details{font-size:12px}}
 
 .side-panel-launcher-action[hidden],.bottom-panel-launcher button[hidden],.composer-circle-button[hidden],.icon-button[hidden],.files-action-button[hidden],.files-action-link[hidden]{display:none!important}

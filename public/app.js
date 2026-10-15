@@ -4,7 +4,7 @@ import { codexIcon, hydrateCodexIcons } from './codex-icons.js';
 import { codexInterfaceMark } from './codex-brand.js';
 import { createDomI18n, createI18n } from './i18n.js';
 import { applyTheme, readStoredTheme, storeTheme } from './theme.js';
-import { normalizeTokenUsage, contextUsageValue, formatTokenCount, formatElapsed, formatQuotaResetCountdown, formatQuotaWindowLabel, normalizeRateLimits } from './usage.js';
+import { normalizeTokenUsage, contextUsageValue, formatCompactTokenCount, formatTokenCount, formatElapsed, formatQuotaResetCountdown, formatQuotaWindowLabel, normalizeRateLimits } from './usage.js';
 import { buildConversationInput, exportFilename, formatThreadExportMarkdown, readThreadDraft, writeThreadDraft } from './session-tools.js';
 import { buildApprovalModel, createReviewPreferences, parseUnifiedDiff, permissionRows, splitDiffHunk, summarizeActivity, unifiedDiffFromFileChanges } from './codex-surfaces.js';
 import { browserSandboxFor, normalizeBrowserUrl } from './browser-panel.js';
@@ -23,6 +23,7 @@ let pendingSubmission=null,conversationEpoch=0,runtimeTick=null,localRun=null,pr
 const MAX_CLIENT_UPLOAD_BYTES=25*1024*1024;
 const fileBrowserState={cwd:'',dir:'',parent:null,entries:[],preview:null,requestId:0,previewRequestId:0,sidebarTab:'sessions'};
 const threadRuns=new Map();
+const unreadCompletedThreads=new Set();
 const pendingApprovals=new Map(),interruptingTurns=new Set();
 const pendingMarkdownFrames=new WeakMap();
 let folderBrowse={path:'~',parent:null,selected:null};
@@ -258,13 +259,22 @@ function setRunPhase(threadId,phase,details={}){
   if(!threadId)return;
   const previous=threadRuns.get(threadId),newTurn=(details.turnId&&previous?.turnId&&details.turnId!==previous.turnId)||(previous&&!RUNNING_PHASES.has(previous.phase)&&RUNNING_PHASES.has(phase));
   const run=newTurn?{}:{...previous};
-  if(RUNNING_PHASES.has(phase)){delete run.endedAt;if(!details.error)delete run.error}
+  if(RUNNING_PHASES.has(phase)){delete run.endedAt;if(!details.error)delete run.error;unreadCompletedThreads.delete(threadId)}
   if(!run.startedAt&&RUNNING_PHASES.has(phase))run.startedAt=Date.now();
   Object.assign(run,details,{phase});
   if(details.event)run.lastEventAt=Date.now();
   if(!RUNNING_PHASES.has(phase)&&run.startedAt)run.endedAt=Date.now();
+  if(phase==='completed')unreadCompletedThreads.add(threadId);
   threadRuns.set(threadId,run);
   if(threadId===state.active?.id)renderRuntimeBar();
+  if(previous?.phase!==phase)renderThreads();
+}
+function runtimeStatusIconMarkup(phase,busy,connected){
+  if(!connected||busy)return codexIcon('loaderCircle');
+  if(phase==='approval')return codexIcon('shield');
+  if(phase==='failed')return codexIcon('triangleAlert');
+  if(phase==='completed')return codexIcon('check');
+  return '<span class="runtime-status-dot"></span>';
 }
 function itemRunPhase(item){if(item?.type==='reasoning')return'thinking';if(item?.type==='agentMessage')return'responding';if(item?.type==='fileChange')return'editing';if(item?.type==='commandExecution')return'running';return item?.type==='userMessage'?'waiting':'working'}
 function renderRuntimeBar(){
@@ -274,24 +284,31 @@ function renderRuntimeBar(){
   const run=pending&&(!observed?.lastEventAt||['preparing','sending'].includes(observed.phase))?pending:observed;
   const busy=!!run&&RUNNING_PHASES.has(run.phase),phase=run?.phase||'idle';
   footer.dataset.phase=phase;footer.dataset.busy=String(busy);
-  $('#runtimeStatus').textContent=t(!state.connected?'Connecting to Codex':RUN_LABELS[phase]||'Ready');
+  const statusText=t(!state.connected?'Connecting to Codex':RUN_LABELS[phase]||'Ready');
+  $('#runtimeStatus').textContent=statusText;
+  const pill=$('#runtimeStatusPill'),icon=$('#runtimeStatusIcon');
+  if(pill)pill.title=statusText;
+  if(icon)icon.innerHTML=runtimeStatusIconMarkup(phase,busy,state.connected);
   const elapsed=$('#runtimeElapsed'),duration=!busy&&Number.isFinite(run?.durationMs)?run.durationMs:run?.startedAt?(run.endedAt||Date.now())-run.startedAt:null;
   elapsed.hidden=duration===null;if(duration!==null)elapsed.textContent=formatElapsed(duration);
   const hint=$('#runtimeHint'),quiet=busy&&phase!=='approval'&&Date.now()-(run.lastEventAt||run.startedAt)>15000;
   hint.hidden=!quiet&&!run?.error;
   hint.textContent=run?.error||t('Still waiting for a Codex event…');
   const usage=normalizeTokenUsage(state.tokenUsage.get(state.active?.id)),context=contextUsageValue(usage);
+  const summaryParts=[];
+  const inOut=[usage.total.inputTokens!==null?`↑${formatCompactTokenCount(usage.total.inputTokens)}`:null,usage.total.outputTokens!==null?`↓${formatCompactTokenCount(usage.total.outputTokens)}`:null].filter(Boolean).join(' ');
+  if(inOut)summaryParts.push(inOut);
+  else if(usage.total.totalTokens!==null)summaryParts.push(formatCompactTokenCount(usage.total.totalTokens));
+  if(context)summaryParts.push(`${Math.round(context.percent)}%`);
   const quotaParts=[quotaWindowSummaryLabel(state.rateLimits?.primary),quotaWindowSummaryLabel(state.rateLimits?.secondary)].filter(Boolean);
-  const summaryParts=[`${t('Tokens')}: ${formatTokenCount(usage.total.totalTokens)}`];
-  if(context)summaryParts.push(`${t('Context')}: ${Math.round(context.percent)}%`);
   if(quotaParts.length)summaryParts.push(quotaParts.join(' · '));
-  $('#runtimeTokenSummary').textContent=summaryParts.join(' · ');
+  $('#runtimeTokenSummary').textContent=summaryParts.length?summaryParts.join(' · '):'—';
   const section=(title,data)=>`<section><strong>${escapeHtml(t(title))}</strong><dl>${[['Input tokens',data.inputTokens],['Cached input tokens',data.cachedInputTokens],['Output tokens',data.outputTokens],['Reasoning output tokens',data.reasoningOutputTokens],['Total tokens',data.totalTokens]].map(([label,value])=>`<dt>${escapeHtml(t(label))}</dt><dd>${formatTokenCount(value)}</dd>`).join('')}</dl></section>`;
   $('#runtimeUsageDetails').innerHTML=renderRateLimitsSection()+section('Session usage',usage.total)+section('Last reported usage',usage.last)+`<small>${escapeHtml(t('Cache is included in input; reasoning is included in output.'))}</small><small>${escapeHtml(t('Usage updates when Codex reports it; no estimate is shown.'))}</small>`;
   if(busy&&!runtimeTick)runtimeTick=setInterval(renderRuntimeBar,1000);
   else if(!busy&&runtimeTick){clearInterval(runtimeTick);runtimeTick=null}
 }
-function renderContextUsage(){renderRuntimeBar();const indicator=$('#contextUsage'),usage=state.active?.id?contextUsageValue(state.tokenUsage.get(state.active.id)):null;if(!indicator)return;if(!usage){indicator.hidden=true;indicator.removeAttribute('data-tooltip');return}const percent=Math.max(0,Math.min(usage.percent,100)),rounded=Math.round(percent),remaining=Math.max(0,100-rounded),usedThousands=Math.round(usage.usedTokens/1000),windowThousands=Math.round(usage.contextWindow/1000),status=rounded>=50?`${rounded}% full`:`${rounded}% used (${remaining}% left)`;indicator.hidden=false;indicator.style.setProperty('--context-percent',String(percent));indicator.setAttribute('aria-label',`Context usage: ${rounded}%`);indicator.dataset.tooltip=`Context window:\n${status}\n${usedThousands}k / ${windowThousands}k tokens used`}
+function renderContextUsage(){renderRuntimeBar()}
 function menuTitle(text,back=false){return `<div class="model-menu-title-row">${back?`<button type="button" class="model-menu-back" id="modelMenuBack" aria-label="Back">${codexIcon('chevronLeft')}</button>`:''}<div class="model-menu-title">${escapeHtml(text)}</div></div>`}
 function renderModelMenuMain(){const menu=$('#modelMenu'),model=selectedModel(),effort=$('#effortSelect');menu.innerHTML=`<div class="model-menu-view model-menu-view-main">${menuTitle('Reasoning')}<div class="model-menu-list" data-model-menu-efforts></div><div class="model-menu-separator"></div><button type="button" class="model-submenu-button" id="modelSubmenuButton"><span>Model</span><span class="model-submenu-value">${escapeHtml(modelDisplay(model))}</span>${codexIcon('chevronRight')}</button></div>`;const list=menu.querySelector('[data-model-menu-efforts]');for(const option of effort.options){const button=document.createElement('button');button.type='button';button.className='model-effort-row';button.dataset.value=option.value;button.setAttribute('aria-checked',String(option.selected));button.innerHTML=`<span>${escapeHtml(reasoningLabel(option.value))}</span><span class="model-check">${option.selected?codexIcon('check'):''}</span>`;button.onclick=()=>chooseEffort(option.value);list.append(button)}menu.querySelector('#modelSubmenuButton').onclick=renderModelSubmenu}
 function renderModelSubmenu(){const menu=$('#modelMenu');menu.innerHTML=`<div class="model-menu-view model-menu-view-models">${menuTitle('Model',true)}<div class="model-menu-list model-list"></div></div>`;menu.querySelector('#modelMenuBack').onclick=renderModelMenuMain;const list=menu.querySelector('.model-list');for(const model of state.models){const button=document.createElement('button');button.type='button';button.className='model-option';button.role='menuitemradio';button.dataset.model=model.model;button.setAttribute('aria-checked',String(model.model===state.selectedModel));button.innerHTML=`<span class="model-option-copy"><strong>${escapeHtml(modelDisplay(model))}</strong>${model.description?`<small>${escapeHtml(model.description)}</small>`:''}</span><span class="model-check">${model.model===state.selectedModel?codexIcon('check'):''}</span>`;button.onclick=()=>chooseModel(model.model);list.append(button)}}
@@ -325,18 +342,24 @@ function taskNotifyEnabled(){return localStorage.getItem(TASK_NOTIFY_STORAGE_KEY
 // optional: their absence must not abort startup before controls and the bridge bind.
 function taskNotificationsSupported(){return window.isSecureContext!==false&&typeof window.Notification==='function'}
 function syncTaskNotifySettings(){
-  const toggle=$('#settingsTaskNotifyToggle');if(!toggle)return;
+  const toggle=$('#settingsTaskNotifyToggle'),row=$('#settingsTaskNotifyRow'),desc=$('#settingsTaskNotifyDescription');if(!toggle)return;
   const supported=taskNotificationsSupported();
-  toggle.disabled=!supported;
+  toggle.disabled=false;
+  toggle.dataset.unsupported=String(!supported);
+  row?.classList.toggle('is-disabled',!supported);
   toggle.checked=supported&&taskNotifyEnabled()&&window.Notification.permission!=='denied';
-  toggle.title=supported?'':t('Browser notifications are unavailable in this browser or connection');
+  const unsupportedMsg=t('Browser notifications are unavailable in this browser or connection (requires HTTPS or localhost)');
+  toggle.title=supported?'':unsupportedMsg;
+  if(row)row.title=supported?'':unsupportedMsg;
+  if(desc)desc.textContent=supported?t('Show a browser notification when a task completes'):unsupportedMsg;
 }
 async function setTaskNotifyEnabled(enabled){
-  if(!taskNotificationsSupported()){syncTaskNotifySettings();return}
+  if(!taskNotificationsSupported()){syncTaskNotifySettings();toast(t('Browser notifications are unavailable in this browser or connection (requires HTTPS or localhost)'),3600);return}
   const on=Boolean(enabled);localStorage.setItem(TASK_NOTIFY_STORAGE_KEY,String(on));
   if(on&&window.Notification.permission==='default'){try{await window.Notification.requestPermission()}catch{}}
   syncTaskNotifySettings();
   if(on&&window.Notification.permission==='denied')toast(t('Browser notifications are blocked'));
+  else toast(t(on?'Task notifications enabled':'Task notifications disabled'));
 }
 function maybeNotifyTaskCompleted(p){if(!taskNotificationsSupported()||!taskNotifyEnabled()||window.Notification.permission!=='granted')return;if(document.hasFocus()&&!document.hidden)return;const thread=state.threads.find(x=>x.id===p.threadId),title=thread?.name||t('Task completed');try{new window.Notification(t('Task completed'),{body:title,tag:`codex-turn-${p.turn?.id||Date.now()}`})}catch{}}
 async function requestTaskNotifyPermission(){
@@ -561,11 +584,51 @@ async function deleteThread(thread){
     toast(t('Thread deleted'));
   }catch(error){console.error('Could not delete thread',error);toast(t('Could not delete thread'))}
 }
+function threadVisualStatus(thread){
+  const id=thread?.id;if(!id)return'idle';
+  if([...pendingApprovals.values()].some(req=>req.params?.threadId===id))return'approval';
+  const run=threadRuns.get(id);
+  if(run&&RUNNING_PHASES.has(run.phase))return run.phase==='approval'?'approval':'running';
+  if(thread.status?.type==='active')return'running';
+  if(unreadCompletedThreads.has(id)||run?.phase==='completed')return'completed';
+  return'idle';
+}
 function renderThreads(){
   const list=$('#threadList'),q=$('#threadSearch').value.trim().toLowerCase(),groups=new Map;list.innerHTML='';
   for(const thread of state.threads){if(q&&!titleOf(thread).toLowerCase().includes(q)&&!thread.cwd?.toLowerCase().includes(q))continue;const key=sidebarProjectKey(thread),group=groups.get(key)||{key,threads:[],recency:0};group.threads.push(thread);group.recency=Math.max(group.recency,Number(thread.recencyAt||thread.updatedAt)||0);groups.set(key,group)}
   const currentKey=currentSidebarProjectKey(),ordered=[...groups.values()].sort((a,b)=>(a.key===currentKey?-1:b.key===currentKey?1:b.recency-a.recency));
-  for(const group of ordered){const containsActive=group.threads.some(thread=>thread.id===state.active?.id),expanded=Boolean(q)||(Object.hasOwn(sidebarProjectExpansion,group.key)?sidebarProjectExpansion[group.key]:containsActive||group.key===currentKey||ordered.length===1),section=document.createElement('section');section.className='sidebar-project-group';section.dataset.project=group.key;const heading=document.createElement('button');heading.type='button';heading.className='sidebar-project-row';heading.setAttribute('aria-expanded',String(expanded));heading.title=group.key==='__tasks__'?t('Tasks'):shortPath(group.key);heading.innerHTML=`${codexIcon(group.key==='__tasks__'?'messageSquare':'folderOpen')}<span>${escapeHtml(sidebarProjectName(group.key))}</span>${codexIcon('chevronRight','sidebar-project-chevron')}`;section.append(heading);const threads=document.createElement('div');threads.className='sidebar-project-threads'+(expanded?' expanded':'');threads.setAttribute('aria-hidden',String(!expanded));threads.style.setProperty('--sidebar-thread-count',String(group.threads.length));heading.onclick=()=>{const next=heading.getAttribute('aria-expanded')!=='true';sidebarProjectExpansion[group.key]=next;saveSidebarProjectExpansion();heading.setAttribute('aria-expanded',String(next));threads.setAttribute('aria-hidden',String(!next));threads.classList.toggle('expanded',next)};for(const thread of group.threads){const row=document.createElement('div');row.className='thread-item'+(state.active?.id===thread.id?' active':'');row.dataset.id=thread.id;row.title=[titleOf(thread),shortPath(thread.cwd)].filter(Boolean).join(' — ');row.setAttribute('role','button');row.tabIndex=0;const name=document.createElement('span');name.className='thread-name';name.textContent=titleOf(thread);const meta=document.createElement('span');meta.className='thread-meta';const time=document.createElement('time');time.textContent=formatAge(thread.recencyAt||thread.updatedAt);meta.append(time);const remove=document.createElement('button');remove.type='button';remove.className='thread-delete';remove.title=t('Delete thread');remove.setAttribute('aria-label',t('Delete thread “{title}”',{title:titleOf(thread)}));remove.innerHTML=codexIcon('trash');remove.onkeydown=event=>event.stopPropagation();remove.onclick=event=>{event.stopPropagation();deleteThread(thread)};row.append(name,meta,remove);const open=()=>{if(mobileSidebarEnabled())setSidebarOpen(false);openThread(thread.id)};row.onclick=event=>{if(event.target.closest('.thread-delete'))return;open()};row.onkeydown=event=>{if(event.target.closest('.thread-delete'))return;if(event.key==='Enter'||event.key===' '){event.preventDefault();open()}};threads.append(row)}section.append(threads);list.append(section)}
+  for(const group of ordered){
+    const containsActive=group.threads.some(thread=>thread.id===state.active?.id),expanded=Boolean(q)||(Object.hasOwn(sidebarProjectExpansion,group.key)?sidebarProjectExpansion[group.key]:containsActive||group.key===currentKey||ordered.length===1),section=document.createElement('section');
+    section.className='sidebar-project-group';section.dataset.project=group.key;
+    const states=group.threads.map(threadVisualStatus),groupDot=states.includes('running')?'is-running':states.includes('approval')?'is-approval':states.includes('completed')?'is-completed':'';
+    const heading=document.createElement('button');heading.type='button';heading.className='sidebar-project-row';heading.setAttribute('aria-expanded',String(expanded));heading.title=group.key==='__tasks__'?t('Tasks'):shortPath(group.key);
+    heading.innerHTML=`${codexIcon(group.key==='__tasks__'?'messageSquare':'folderOpen')}<span>${escapeHtml(sidebarProjectName(group.key))}</span>${!expanded&&groupDot?`<span class="sidebar-project-dot ${groupDot}" aria-hidden="true"></span>`:''}${codexIcon('chevronRight','sidebar-project-chevron')}`;
+    section.append(heading);
+    const threads=document.createElement('div');threads.className='sidebar-project-threads'+(expanded?' expanded':'');threads.setAttribute('aria-hidden',String(!expanded));threads.style.setProperty('--sidebar-thread-count',String(group.threads.length));
+    heading.onclick=()=>{const next=heading.getAttribute('aria-expanded')!=='true';sidebarProjectExpansion[group.key]=next;saveSidebarProjectExpansion();renderThreads()};
+    for(const thread of group.threads){
+      const status=threadVisualStatus(thread);
+      const row=document.createElement('div');row.className='thread-item'+(state.active?.id===thread.id?' active':'')+(status!=='idle'?` is-${status}`:'');row.dataset.id=thread.id;row.dataset.threadStatus=status;row.title=[titleOf(thread),shortPath(thread.cwd)].filter(Boolean).join(' — ');row.setAttribute('role','button');row.tabIndex=0;
+      const name=document.createElement('span');name.className='thread-name';name.textContent=titleOf(thread);
+      const meta=document.createElement('span');meta.className='thread-meta'+(status!=='idle'?' is-status':'');
+      if(status==='running'){
+        meta.innerHTML=`<span class="thread-status-spinner" role="img" aria-label="${escapeHtml(t('Running'))}" title="${escapeHtml(t('Running'))}">${codexIcon('loaderCircle')}</span>`;
+      }else if(status==='approval'){
+        meta.innerHTML=`<span class="thread-status-dot is-approval" role="img" aria-label="${escapeHtml(t('Waiting for approval'))}" title="${escapeHtml(t('Waiting for approval'))}"></span>`;
+      }else if(status==='completed'){
+        meta.innerHTML=`<span class="thread-status-dot is-completed" role="img" aria-label="${escapeHtml(t('Completed'))}" title="${escapeHtml(t('Completed'))}"></span>`;
+      }else{
+        const time=document.createElement('time');time.textContent=formatAge(thread.recencyAt||thread.updatedAt);meta.append(time);
+      }
+      const remove=document.createElement('button');remove.type='button';remove.className='thread-delete';remove.title=t('Delete thread');remove.setAttribute('aria-label',t('Delete thread “{title}”',{title:titleOf(thread)}));remove.innerHTML=codexIcon('trash');remove.onkeydown=event=>event.stopPropagation();remove.onclick=event=>{event.stopPropagation();deleteThread(thread)};
+      row.append(name,meta,remove);
+      const open=()=>{unreadCompletedThreads.delete(thread.id);if(mobileSidebarEnabled())setSidebarOpen(false);openThread(thread.id)};
+      row.onclick=event=>{if(event.target.closest('.thread-delete'))return;open()};
+      row.onkeydown=event=>{if(event.target.closest('.thread-delete'))return;if(event.key==='Enter'||event.key===' '){event.preventDefault();open()}};
+      threads.append(row);
+    }
+    section.append(threads);list.append(section);
+  }
   if(!list.children.length)list.innerHTML='<div class="list-state">No matching tasks</div>';
 }
 async function openThread(id,fallbackSummary=null){
@@ -661,8 +724,18 @@ function onNotification(method,p){
     if(threadId===state.active?.id)renderContextUsage();
     return;
   }
-  // app-server broadcasts all threads to every tab/device; only render this thread.
-  if(p.threadId&&p.threadId!==state.active?.id&&(method.startsWith('item/')||method.startsWith('turn/')||method==='error')){if(method==='turn/completed'||method==='turn/started')refreshThreadsSoon();return}
+  // app-server broadcasts all threads to every tab/device; track sidebar status for background threads,
+  // but only render conversation items for the currently selected thread.
+  if(p.threadId&&p.threadId!==state.active?.id&&(method.startsWith('item/')||method.startsWith('turn/')||method==='error')){
+    if(method==='turn/started')setRunPhase(p.threadId,'waiting',{turnId:p.turn?.id,event:true});
+    else if(method==='turn/completed'){
+      const phase=p.turn?.status==='failed'?'failed':p.turn?.status==='interrupted'?'stopped':'completed';
+      setRunPhase(p.threadId,phase,{turnId:p.turn?.id,event:true,durationMs:turnDurationMs(p.turn)});
+      maybeNotifyTaskCompleted(p);void loadRateLimits();
+    }
+    if(method==='turn/completed'||method==='turn/started')refreshThreadsSoon();
+    return;
+  }
   const eventTurn=p.turnId||p.turn?.id,currentTurn=!activeTurnId()||!eventTurn||eventTurn===activeTurnId();
   const observedRun=threadRuns.get(state.active?.id),knownRunning=!!activeTurnId()||RUNNING_PHASES.has(observedRun?.phase)||(pendingSubmission?.threadId===state.active?.id&&!!pendingSubmission);
   // History hydration can emit item/completed after a terminal snapshot; it must
@@ -693,7 +766,12 @@ function onNotification(method,p){
     if(p.turn?.id)syncWorkedForDivider(p.turn.id,turnDurationMs(p.turn));
     maybeNotifyTaskCompleted(p);scheduleActiveThreadSync(0);refreshThreadsSoon();void loadRateLimits();
   }
-  else if(method==='thread/status/changed'){if(p.threadId===state.active?.id){state.active.status=p.status;scheduleActiveThreadSync(0)}refreshThreadsSoon()}
+  else if(method==='thread/status/changed'){
+    const targetThread=state.threads.find(x=>x.id===p.threadId);
+    if(targetThread)targetThread.status=p.status;
+    if(p.threadId===state.active?.id){state.active.status=p.status;scheduleActiveThreadSync(0)}
+    renderThreads();refreshThreadsSoon();
+  }
   else if(method==='error'){const error=p.error?.message||p.message||'Codex error';setRunPhase(state.active?.id,p.willRetry===false?'failed':'waiting',{turnId:p.turnId,error,event:true});if(p.willRetry===false)setActiveTurnId('');toast(error)}
 }
 function renderAgentDelta(p){

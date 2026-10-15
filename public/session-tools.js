@@ -90,6 +90,14 @@ export function buildConversationInput({ text = "", mentions = [], attachments =
     mentionPaths.add(item.path);
     input.push({ type: "mention", name, path: item.path });
   }
+  const inlinePattern = /(?:^|\s)@(?:"([^"\n]+)"|([^\s@"]+))/g;
+  for (const match of body.matchAll(inlinePattern)) {
+    const rawPath = String(match[1] || match[2] || "").replace(/\/+$/, "").trim();
+    if (!rawPath || mentionPaths.has(rawPath)) continue;
+    const name = rawPath.split("/").filter(Boolean).at(-1) || rawPath;
+    mentionPaths.add(rawPath);
+    input.push({ type: "mention", name, path: rawPath });
+  }
 
   for (const path of imagePaths) input.push({ type: "localImage", path });
   return input;

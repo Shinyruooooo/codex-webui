@@ -234,6 +234,15 @@ Object.assign(ZH_CN, {
   "Browse files": "浏览文件",
   "Select a file from the left sidebar to preview it here.": "在左侧边栏选择文件即可在此预览。",
   "Open terminal": "打开终端",
+  "Remaining quota": "剩余额度",
+  "5h": "5小时",
+  "Weekly": "周额度",
+  "Quota": "额度",
+  "left": "剩余",
+  "used": "已用",
+  "resets in": "重置剩余",
+  "Reset credits": "免费重置次数",
+  "1 match": "1 个匹配",
   "Browser navigation": "浏览器导航",
   "Go back": "后退",
   "Go forward": "前进",
@@ -374,6 +383,7 @@ const ZH_CN_PATTERNS = [
   [/^Remove (.+)$/, match => `移除 ${match[1]}`],
   [/^Attached (\d+) files$/, match => `已附加 ${match[1]} 个文件`],
   [/^Attached (.+)$/, match => `已附加 ${match[1]}`],
+  [/^(\d+) matches$/, match => `${match[1]} 个匹配`],
 ];
 
 export function resolveLocale(preference = "system", languages = []) {

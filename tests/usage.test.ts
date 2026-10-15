@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { contextUsageValue, formatElapsed, formatTokenCount, normalizeTokenUsage } from "../public/usage.js";
+import { contextUsageValue, formatElapsed, formatQuotaResetCountdown, formatQuotaWindowLabel, formatTokenCount, normalizeRateLimits, normalizeTokenUsage } from "../public/usage.js";
 
 const emptyGroup = {
   inputTokens: null,
@@ -103,5 +103,27 @@ describe("formatters", () => {
     expect(formatElapsed(3720000)).toBe("1h 02m");
     expect(formatElapsed(Number.POSITIVE_INFINITY)).toBe("—");
     expect(formatElapsed(-1)).toBe("—");
+  });
+
+  test("normalizes Codex rate limits and formats remaining quota & reset countdowns", () => {
+    const normalized = normalizeRateLimits({
+      rateLimits: {
+        limitId: "codex",
+        primary: { usedPercent: 20, windowDurationMins: 300, resetsAt: 1792079759 },
+        secondary: { usedPercent: 3, windowDurationMins: 10080, resetsAt: 1792666559 },
+        planType: "plus",
+      },
+      rateLimitResetCredits: { availableCount: 3 },
+    });
+    expect(normalized).toEqual({
+      primary: { usedPercent: 20, remainingPercent: 80, windowDurationMins: 300, resetsAt: 1792079759 },
+      secondary: { usedPercent: 3, remainingPercent: 97, windowDurationMins: 10080, resetsAt: 1792666559 },
+      planType: "plus",
+      resetCreditsCount: 3,
+    });
+    expect(formatQuotaWindowLabel(300)).toBe("5h");
+    expect(formatQuotaWindowLabel(10080)).toBe("Weekly");
+    expect(formatQuotaResetCountdown(1000 + 3 * 3600 + 15 * 60, 1000 * 1000)).toBe("3h 15m");
+    expect(formatQuotaResetCountdown(1000 + 5 * 86400, 1000 * 1000)).toBe("5d");
   });
 });

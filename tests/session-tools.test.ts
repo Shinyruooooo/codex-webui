@@ -69,9 +69,13 @@ describe("session tools", () => {
       { type: "localImage", path: "/work/image.png" },
     ]);
     expect(buildConversationInput({
-      text: "See @notes.txt",
+      text: "See @notes.txt and @\"docs/my guide.md\"",
       attachments: [{ relativePath: "notes.txt" }],
-    })).toEqual([{ type: "text", text: "See @notes.txt" }]);
+    })).toEqual([
+      { type: "text", text: "See @notes.txt and @\"docs/my guide.md\"" },
+      { type: "mention", name: "notes.txt", path: "notes.txt" },
+      { type: "mention", name: "my guide.md", path: "docs/my guide.md" },
+    ]);
     expect(buildConversationInput({ attachments: [{ kind: "image", path: "/tmp/pic.png" }] })).toEqual([
       { type: "text", text: "" },
       { type: "localImage", path: "/tmp/pic.png" },

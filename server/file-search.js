@@ -10,8 +10,7 @@ function isInside(path, root) {
 export async function searchWorkspaceFiles(root, query, options = {}) {
   const allowedRoots = options.allowedRoots || [];
   const limit = Math.max(1, Math.min(options.limit || 30, 100));
-  const needle = String(query || '').trim().toLowerCase();
-  if (!needle) return [];
+  const needle = String(query || '').trim().toLowerCase().replace(/^\/+|\/+$/g, '');
   const workspace = await realpath(resolve(root));
   const boundaries = await Promise.all(allowedRoots.map(path => realpath(resolve(path))));
   if (boundaries.length && !boundaries.some(boundary => isInside(workspace, boundary))) throw new Error('Workspace path is outside allowed roots');
@@ -34,18 +33,25 @@ export async function searchWorkspaceFiles(root, query, options = {}) {
       if (entry.isDirectory()) {
         if (entry.name.startsWith('.') || skippedDirectories.has(entry.name)) continue;
         queue.push(fullPath);
-        if (entry.name.toLowerCase().includes(needle) || relativePath.toLowerCase().includes(needle)) matches.push({ path: relativePath, kind: 'folder' });
-      } else if (entry.isFile() && (entry.name.toLowerCase().includes(needle) || relativePath.toLowerCase().includes(needle))) {
+        if (!needle || entry.name.toLowerCase().includes(needle) || relativePath.toLowerCase().includes(needle)) matches.push({ path: relativePath, kind: 'folder' });
+      } else if (entry.isFile() && (!needle || entry.name.toLowerCase().includes(needle) || relativePath.toLowerCase().includes(needle))) {
         matches.push({ path: relativePath, kind: 'file' });
       }
     }
   }
+  const depth = path => {
+    let count = 0;
+    for (const ch of path) if (ch === '/') count += 1;
+    return count;
+  };
   const score = item => {
+    if (!needle) return (item.kind === 'folder' ? 0 : 1) + depth(item.path) * 2;
     const name = basename(item.path).toLowerCase();
-    if (name === needle) return 0;
-    if (name.startsWith(needle)) return 1;
+    const rel = item.path.toLowerCase();
+    if (name === needle || rel === needle) return 0;
+    if (name.startsWith(needle) || rel.startsWith(needle)) return 1;
     if (name.includes(needle)) return 2;
     return 3;
   };
-  return matches.sort((a, b) => score(a) - score(b) || a.path.length - b.path.length || a.path.localeCompare(b.path)).slice(0, limit);
+  return matches.sort((a, b) => score(a) - score(b) || depth(a.path) - depth(b.path) || a.path.length - b.path.length || a.path.localeCompare(b.path)).slice(0, limit);
 }

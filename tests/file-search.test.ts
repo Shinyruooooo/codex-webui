@@ -29,6 +29,15 @@ describe("workspace file mention search", () => {
     ]);
   });
 
+  test("returns top-level files and folders when query is empty for Pi Web @ browsing", async () => {
+    const root = await fixture();
+    expect(await searchWorkspaceFiles(root, "", { allowedRoots: [root] })).toEqual([
+      { path: "src", kind: "folder" },
+      { path: "package.json", kind: "file" },
+      { path: "src/package-helper.ts", kind: "file" },
+    ]);
+  });
+
   test("rejects roots outside the configured boundary", async () => {
     const root = await fixture();
     await expect(searchWorkspaceFiles(tmpdir(), "pack", { allowedRoots: [root] })).rejects.toThrow("outside allowed roots");

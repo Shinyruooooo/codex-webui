@@ -37,7 +37,7 @@ const modelCommand=await page.evaluate(()=>({autocompleteHidden:document.querySe
 await page.keyboard.press('Escape');
 
 await page.locator('#prompt').fill('@');
-const mentionEmpty=await page.evaluate(()=>({type:document.querySelector('#composerAutocomplete').dataset.type,text:document.querySelector('#composerAutocomplete').textContent.trim(),label:document.querySelector('#composerAutocomplete').getAttribute('aria-label')}));
+const mentionEmpty=await page.evaluate(()=>({type:document.querySelector('#composerAutocomplete').dataset.type,text:document.querySelector('#composerAutocomplete').textContent.trim(),label:document.querySelector('#composerAutocomplete').getAttribute('aria-label'),items:document.querySelectorAll('#composerAutocomplete [data-autocomplete-id]').length}));
 await page.locator('#prompt').fill('@package');
 await page.waitForFunction(()=>[...document.querySelectorAll('#composerAutocomplete [data-autocomplete-id]')].some(node=>node.dataset.autocompleteId==='file:package.json'));
 await page.screenshot({path:artifact('composer-mention-menu.png'),fullPage:false});
@@ -73,7 +73,7 @@ if(errors.length
   ||modelCommand.modelTitle!=='Reasoning'
   ||mentionEmpty.type!=='mention'
   ||mentionEmpty.label!=='Mention menu'
-  ||!/Type to search for files/i.test(mentionEmpty.text)
+  ||(!/Type to search for files/i.test(mentionEmpty.text)&&mentionEmpty.items<1)
   ||!mentionResults.onscreen||!mentionResults.topmost
   ||!mentionResults.items.some(item=>item.id==='file:package.json'&&item.title==='package.json')
   ||mentionSelected.value!=='@package.json '

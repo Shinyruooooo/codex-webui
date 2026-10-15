@@ -99,6 +99,17 @@ try {
       let result = {};
       if (method === 'model/list') {
         result = { data: [{ id: 'gpt-5.4-mini', model: 'gpt-5.4-mini', displayName: 'GPT-5.4-Mini', defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium' }] }] };
+      } else if (method === 'account/rateLimits/read') {
+        result = {
+          ordinaryUsageAllowed: true,
+          rateLimits: {
+            limitId: 'codex',
+            primary: { usedPercent: 20, windowDurationMins: 300, resetsAt: Math.floor(Date.now() / 1000) + 7200 },
+            secondary: { usedPercent: 3, windowDurationMins: 10080, resetsAt: Math.floor(Date.now() / 1000) + 86400 * 5 },
+            planType: 'plus',
+          },
+          rateLimitResetCredits: { availableCount: 3 },
+        };
       } else if (method === 'thread/list') {
         result = { data: threads };
       } else if (method === 'permissionProfile/list') {
@@ -147,6 +158,8 @@ try {
       newTabLauncherHidden: document.querySelector('#newTab')?.hidden,
       openSidePanelTabHidden: document.querySelector('#openSidePanelTab')?.hidden,
       hasSidebarTerminalButton: Boolean(document.querySelector('#sidebarTerminalButton')),
+      runtimeSummaryText: document.querySelector('#runtimeTokenSummary')?.textContent?.trim(),
+      runtimeDetailsHtml: document.querySelector('#runtimeUsageDetails')?.innerHTML || '',
     };
   });
   assert.equal(converged.bottomToggleHidden, true);
@@ -160,6 +173,9 @@ try {
   assert.equal(converged.newTabLauncherHidden, true);
   assert.equal(converged.openSidePanelTabHidden, true);
   assert.equal(converged.hasSidebarTerminalButton, true);
+  assert.ok(converged.runtimeSummaryText?.includes('5h: 80%'));
+  assert.ok(converged.runtimeSummaryText?.includes('Weekly: 97%'));
+  assert.ok(converged.runtimeDetailsHtml.includes('Remaining quota'));
 
   // 2. Per-session draft persistence across new chat and existing threads.
   await page.locator('#prompt').fill('Draft for a brand new task');
@@ -211,15 +227,20 @@ try {
   await page.evaluate(() => globalThis.__codexWebuiDebug.compactActiveThread());
   assert.equal(rpcCalls.some(call => call.method === 'thread/compact/start' && call.params.threadId === 'thread-alpha'), true);
 
-  // 5. Left sidebar Files tab browses the project tree; clicking a file opens its preview in the right side panel.
+  // 5. Left sidebar Files tab browses the project tree; hover @ button mentions file directly,
+  // and typing @ in composer immediately lists project files & supports folder drilldown.
   await page.click('#sidebarTabFiles');
   await page.waitForSelector('#sidebarFilesSection:not([hidden]) [data-file-entry-path="README.md"]');
   await page.click('[data-file-entry-path="README.md"]');
   await page.waitForSelector('#sidePanel:not([hidden]) #filesPanel:not([hidden])');
   assert.ok((await page.locator('#filesPreviewBody').textContent()).includes('Hello from workspace preview.'));
-  await page.click('#filesMentionButton');
+  await page.click('[data-file-entry-path="README.md"] .files-entry-mention', { force: true });
   assert.ok((await page.locator('#prompt').inputValue()).includes('@README.md'));
   assert.equal(await page.locator('.composer-context-chip').count(), 1);
+
+  await page.locator('#prompt').fill('@');
+  await page.waitForFunction(() => document.querySelectorAll('#composerAutocomplete [data-autocomplete-id]').length > 0);
+  await page.locator('#prompt').fill('@README.md ');
 
   await page.click('[data-file-entry-path="docs"]');
   await page.waitForSelector('[data-file-entry-path="docs/notes.txt"]');

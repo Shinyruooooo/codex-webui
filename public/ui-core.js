@@ -74,17 +74,47 @@ export function getComposerAutocomplete(text, cursor = text.length) {
     const start = before.indexOf("/");
     return { type: "slash", query: slash[1], start, end };
   }
-  const mention = before.match(/(?:^|\s)@([^\s@]*)$/);
+  const quotedMention = before.match(/(?:^|\s)@"([^"\n]*)$/);
+  if (quotedMention) {
+    const start = end - (quotedMention[1].length + 2);
+    return { type: "mention", query: quotedMention[1], quoted: true, start, end };
+  }
+  const mention = before.match(/(?:^|\s)@([^\s@"]*)$/);
   if (!mention) return null;
   const start = before.lastIndexOf("@");
-  return { type: "mention", query: mention[1], start, end };
+  return { type: "mention", query: mention[1], quoted: false, start, end };
+}
+
+export function formatFileMention(path, { isDirectory = false, quoted = false } = {}) {
+  const normalized = String(path || "").replace(/^\/+|\/+$/g, "");
+  if (!normalized) return { text: "", cursorOffset: 0 };
+  const target = isDirectory ? `${normalized}/` : normalized;
+  const useQuotes = Boolean(quoted || /\s/.test(target));
+  if (isDirectory) {
+    const text = useQuotes ? `@"${target}"` : `@${target}`;
+    return { text, cursorOffset: useQuotes ? text.length - 1 : text.length };
+  }
+  const text = useQuotes ? `@"${target}" ` : `@${target} `;
+  return { text, cursorOffset: text.length };
 }
 
 export function applyComposerSuggestion(text, match, replacement) {
   const value = String(text || "");
   if (!match || match.start < 0 || match.end < match.start) return { text: value, cursor: value.length };
+  const replaceEnd = match.quoted && value[match.end] === '"' ? match.end + 1 : match.end;
   const before = value.slice(0, match.start);
-  const after = value.slice(match.end);
+  const after = value.slice(replaceEnd);
+  if (replacement && typeof replacement === "object" && typeof replacement.text === "string") {
+    const raw = replacement.text;
+    const isCompleteToken = raw.endsWith(" ");
+    const trimmed = isCompleteToken ? raw.slice(0, -1) : raw;
+    const needsSpace = isCompleteToken && (after.length === 0 || !/^\s/.test(after));
+    const inserted = trimmed + (needsSpace ? " " : "");
+    const cursorOffset = Number.isFinite(replacement.cursorOffset)
+      ? Math.min(replacement.cursorOffset, inserted.length)
+      : inserted.length;
+    return { text: before + inserted + after, cursor: before.length + cursorOffset };
+  }
   const needsSpace = after.length === 0 || !/^\s/.test(after);
   const inserted = String(replacement || "") + (needsSpace ? " " : "");
   return { text: before + inserted + after, cursor: before.length + inserted.length };

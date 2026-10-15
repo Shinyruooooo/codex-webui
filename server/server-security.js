@@ -6,6 +6,7 @@ const BROWSER_RPC_METHODS = new Set([
   "model/list",
   "permissionProfile/list",
   "account/logout",
+  "account/rateLimits/read",
   "thread/list",
   "thread/read",
   "thread/delete",

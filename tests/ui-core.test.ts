@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_TURN_PAGE_SIZE, applyComposerSuggestion, createLatestRequestGate, createTurnWindow, filterAppModels, getComposerAutocomplete, resolveComposerPlaceholder, selectModelState } from "../public/ui-core.js";
+import { DEFAULT_TURN_PAGE_SIZE, applyComposerSuggestion, createLatestRequestGate, createTurnWindow, filterAppModels, formatFileMention, getComposerAutocomplete, resolveComposerPlaceholder, selectModelState } from "../public/ui-core.js";
 
 describe("conversation turn window", () => {
   test("uses a small default page for fast first paint", () => {
@@ -85,8 +85,30 @@ describe("composer autocomplete", () => {
 
   test("recognizes an at mention at the cursor and replaces only that token", () => {
     const match = getComposerAutocomplete("review @pack next", 12);
-    expect(match).toEqual({ type: "mention", query: "pack", start: 7, end: 12 });
+    expect(match).toEqual({ type: "mention", query: "pack", quoted: false, start: 7, end: 12 });
     expect(applyComposerSuggestion("review @pack next", match!, "@package.json")).toEqual({ text: "review @package.json next", cursor: 20 });
+  });
+
+  test("supports Pi Web-style quoted mentions and folder trailing-slash drilldown", () => {
+    const quoted = getComposerAutocomplete('check @"my docs/re', 18);
+    expect(quoted).toEqual({ type: "mention", query: "my docs/re", quoted: true, start: 6, end: 18 });
+    expect(formatFileMention("my docs/readme.md", { isDirectory: false, quoted: true })).toEqual({
+      text: '@"my docs/readme.md" ',
+      cursorOffset: 21,
+    });
+    expect(formatFileMention("src", { isDirectory: true, quoted: false })).toEqual({
+      text: "@src/",
+      cursorOffset: 5,
+    });
+    const afterFolder = applyComposerSuggestion("check @sr", getComposerAutocomplete("check @sr", 9)!, formatFileMention("src", { isDirectory: true }));
+    expect(afterFolder).toEqual({ text: "check @src/", cursor: 11 });
+    expect(getComposerAutocomplete(afterFolder.text, afterFolder.cursor)).toEqual({
+      type: "mention",
+      query: "src/",
+      quoted: false,
+      start: 6,
+      end: 11,
+    });
   });
 
   test("adds a trailing space when completing at the end", () => {

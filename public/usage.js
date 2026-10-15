@@ -69,3 +69,56 @@ export function formatElapsed(ms) {
   const hours = Math.floor(minutes / 60);
   return `${hours}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
+
+function normalizeRateWindow(window) {
+  if (!window || typeof window !== "object") return null;
+  const usedPercent = Number(window.usedPercent ?? window.used_percent);
+  if (!Number.isFinite(usedPercent) || usedPercent < 0) return null;
+  const clampedUsed = Math.max(0, Math.min(100, Math.round(usedPercent)));
+  const remainingPercent = Math.max(0, 100 - clampedUsed);
+  const rawDuration = Number(window.windowDurationMins ?? window.window_duration_mins);
+  const windowDurationMins = Number.isFinite(rawDuration) && rawDuration > 0 ? Math.round(rawDuration) : null;
+  const rawReset = Number(window.resetsAt ?? window.resets_at);
+  const resetsAt = Number.isFinite(rawReset) && rawReset > 0 ? Math.round(rawReset) : null;
+  return { usedPercent: clampedUsed, remainingPercent, windowDurationMins, resetsAt };
+}
+
+export function formatQuotaWindowLabel(windowDurationMins) {
+  if (!Number.isFinite(windowDurationMins) || windowDurationMins <= 0) return "Quota";
+  if (windowDurationMins === 300) return "5h";
+  if (windowDurationMins === 10080) return "Weekly";
+  if (windowDurationMins % 1440 === 0) return `${windowDurationMins / 1440}d`;
+  if (windowDurationMins % 60 === 0) return `${windowDurationMins / 60}h`;
+  return `${windowDurationMins}m`;
+}
+
+export function formatQuotaResetCountdown(resetsAtSeconds, nowMs = Date.now()) {
+  if (!Number.isFinite(resetsAtSeconds) || resetsAtSeconds <= 0) return null;
+  const remainingMs = resetsAtSeconds * 1000 - nowMs;
+  if (remainingMs <= 0) return "now";
+  const totalMinutes = Math.ceil(remainingMs / 60000);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const totalHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (totalHours < 48) return minutes > 0 ? `${totalHours}h ${minutes}m` : `${totalHours}h`;
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+}
+
+export function normalizeRateLimits(payload, previous = null) {
+  const snapshot = payload?.rateLimitsByLimitId?.codex
+    ?? payload?.rateLimits
+    ?? payload;
+  if (!snapshot || typeof snapshot !== "object") return previous;
+  const primary = normalizeRateWindow(snapshot.primary) ?? previous?.primary ?? null;
+  const secondary = normalizeRateWindow(snapshot.secondary) ?? previous?.secondary ?? null;
+  if (!primary && !secondary) return previous;
+  const planType = typeof snapshot.planType === "string" && snapshot.planType
+    ? snapshot.planType
+    : previous?.planType ?? null;
+  const resetCreditsCount = Number.isInteger(payload?.rateLimitResetCredits?.availableCount)
+    ? payload.rateLimitResetCredits.availableCount
+    : previous?.resetCreditsCount ?? null;
+  return { primary, secondary, planType, resetCreditsCount };
+}

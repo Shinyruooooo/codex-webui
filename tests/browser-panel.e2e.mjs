@@ -12,8 +12,7 @@ for(const viewport of [{width:1280,height:720},{width:360,height:700}]){
   page.on('pageerror',error=>errors.push(error.message));
   page.on('console',message=>{if(message.type()==='error'&&!message.text().includes('404'))errors.push(message.text())});
   await page.goto(base,{waitUntil:'networkidle'});
-  await page.click('#toggleSidePanel');
-  await page.click('[data-side-panel-action="browser"]');
+  await page.evaluate(()=>globalThis.__codexWebuiDebug.openUtilityPanel('browser'));
   await page.waitForFunction(()=>!document.querySelector('#browserPanel').hidden);
   const emptyExternalHidden=await page.locator('#browserOpenExternal').evaluate(node=>node.hidden&&getComputedStyle(node).display==='none');
 
@@ -34,7 +33,6 @@ for(const viewport of [{width:1280,height:720},{width:360,height:700}]){
   await page.waitForFunction(url=>document.querySelector('#browserUrl').value===url&&document.querySelector('#browserStatus')?.dataset.tone==='loaded',second);
   await page.click('#browserRefresh');
   await page.waitForFunction(()=>document.querySelector('#browserStatus')?.dataset.tone==='loaded');
-  await page.click('#newTab');
   await page.click('#utilityTab');
 
   const result=await page.evaluate(()=>{

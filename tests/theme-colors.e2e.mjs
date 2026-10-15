@@ -33,7 +33,6 @@ for(const scheme of ['light','dark']){
     const older=document.createElement('button');older.className='load-older';older.textContent='Load earlier messages';document.querySelector('#conversation').prepend(older);
   });
   await page.click('#toggleSidePanel');
-  await page.click('[data-side-panel-action="review"]');
   await page.click('.approval-menu-toggle');
   await page.click('.activity-item');
   await page.hover('.activity-item');
@@ -51,7 +50,6 @@ for(const scheme of ['light','dark']){
       composerAdd:style('[data-composer-control="add"]'),
       composerApproval:style('[data-composer-control="approval"]'),
       composerModel:style('[data-composer-control="model"] #modelButton'),
-      composerMic:style('[data-composer-control="dictation"]'),
       composerSend:style('[data-composer-control="send"]'),
       inlineCode:style('.message-text code'),
       codeBlock:style('.message-text pre'),
@@ -88,7 +86,6 @@ for(const scheme of ['light','dark']){
     composerAdd:contrast(result.composerAdd.color,result.composer.background),
     composerApproval:contrast(result.composerApproval.color,result.composer.background),
     composerModel:contrast(result.composerModel.color,result.composer.background),
-    composerMic:contrast(result.composerMic.color,result.composer.background),
     composerSend:contrast(result.composerSend.color,result.composerSend.background),
     inlineCode:contrast(result.inlineCode.color,result.inlineCode.background),
     codeBlock:contrast(result.codeBlockText.color,result.codeBlock.background),

@@ -1,7 +1,7 @@
-# Codex WebUI
+# Codex PiWeb UI
 
 <p align="center">
-  <strong>A local, LAN-accessible WebUI for the real Codex app-server.</strong>
+  <strong>A Pi Web-style local, LAN-accessible WebUI for the real Codex app-server.</strong>
 </p>
 
 <p align="center">
@@ -11,11 +11,14 @@
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/lezi-fun/codex-webui?style=flat-square"></a>
-  <a href="https://github.com/lezi-fun/codex-webui/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/lezi-fun/codex-webui?style=flat-square"></a>
-  <a href="https://github.com/lezi-fun/codex-webui/issues"><img alt="GitHub issues" src="https://img.shields.io/github/issues/lezi-fun/codex-webui?style=flat-square"></a>
+  <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/Shinyruooooo/codex-webui?style=flat-square"></a>
+  <a href="https://github.com/Shinyruooooo/codex-webui/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Shinyruooooo/codex-webui?style=flat-square"></a>
+  <a href="https://github.com/Shinyruooooo/codex-webui/issues"><img alt="GitHub issues" src="https://img.shields.io/github/issues/Shinyruooooo/codex-webui?style=flat-square"></a>
   <a href="https://bun.sh/"><img alt="Bun 1.3 or newer" src="https://img.shields.io/badge/Bun-1.3%2B-fbf0df?style=flat-square&amp;logo=bun&amp;logoColor=000"></a>
 </p>
+
+> [!NOTE]
+> **Secondary Development & Attribution:** **Codex PiWeb UI** is a secondary development (derivative work) built upon [`lezi-fun/codex-webui`](https://github.com/lezi-fun/codex-webui) (MIT License), with its three-column workspace layout and core interaction experience redesigned to align with [`agegr/pi-web`](https://github.com/agegr/pi-web) (MIT License). Original copyright and license notices are preserved in [`LICENSE`](./LICENSE) and [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
 
 > [!IMPORTANT]
 > This is an **unofficial community project**. It is not affiliated with, endorsed by, or maintained by OpenAI. OpenAI and Codex are trademarks of their respective owners.
@@ -64,7 +67,7 @@ Complete the Codex sign-in flow before starting this project.
 ## Quick start
 
 ```bash
-git clone https://github.com/lezi-fun/codex-webui.git
+git clone https://github.com/Shinyruooooo/codex-webui.git
 cd codex-webui
 bun install
 bun run start

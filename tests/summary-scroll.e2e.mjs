@@ -4,6 +4,7 @@ import { launchOptions } from './browser-runtime.mjs';
 const browser=await chromium.launch(launchOptions());
 const page=await browser.newPage({viewport:{width:591,height:360},isMobile:true,hasTouch:true});
 await page.goto(process.env.CODEX_WEBUI_TEST_URL||'http://127.0.0.1:8899',{waitUntil:'networkidle'});
+await page.evaluate(()=>document.querySelector('#toggleSummaryPanel')?.removeAttribute('hidden'));
 await page.click('#toggleSummaryPanel');
 await page.waitForFunction(()=>document.activeElement?.id==='closeSummaryPanel');
 const result=await page.evaluate(()=>{

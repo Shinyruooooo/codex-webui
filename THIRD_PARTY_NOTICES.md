@@ -1,5 +1,13 @@
 # Third-party notices
 
+## Upstream base project (`lezi-fun/codex-webui`)
+
+This repository (**Codex PiWeb UI**) is a secondary development (derivative work) based on [`lezi-fun/codex-webui`](https://github.com/lezi-fun/codex-webui), originally licensed under the MIT License (`Copyright (c) 2026 lezi-fun`). The original copyright and permission notice are preserved in [`LICENSE`](./LICENSE).
+
+## Interface and interaction design inspiration (`agegr/pi-web`)
+
+The three-column workspace layout (left sidebar icon switcher for Chats / Files, center conversation dock with persistent runtime status & token usage bar, and right panel for file preview / PTY terminal / diff review) and core workspace ergonomics are inspired by [`@agegr/pi-web`](https://github.com/agegr/pi-web) (MIT License). No `@agegr/pi-web` source files are bundled in this repository.
+
 ## Lucide
 
 The interface icons in `public/codex-icons.js` use the exact Lucide icon path data bundled with the locally installed Codex.app (`lucide-react` 0.456.0).

@@ -2,6 +2,10 @@ node_modules/
 public/app.bundle.js
 docs/app-server-schema/
 .artifacts/
+.runtime/
+.state/
+workspace/
+start.sh
 /index.html
 *.log
 .DS_Store

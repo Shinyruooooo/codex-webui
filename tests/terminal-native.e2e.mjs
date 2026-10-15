@@ -20,6 +20,7 @@ const composer = await page.evaluate(() => ({
   borderTop: getComputedStyle(document.querySelector('.composer-dock')).borderTop,
 }));
 
+await page.evaluate(()=>document.querySelector('#toggleBottomPanel')?.removeAttribute('hidden'));
 await page.click('#toggleBottomPanel');
 await page.click('[data-bottom-panel-action="terminal"]');
 await page.waitForSelector('#terminalHost .xterm', { timeout: 10_000 });

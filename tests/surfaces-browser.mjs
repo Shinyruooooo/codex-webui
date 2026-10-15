@@ -10,6 +10,8 @@ async function run(width,height,name){
  await page.waitForFunction(()=>globalThis.__codexWebuiDebug);
  await page.evaluate(async()=>{
    const api=globalThis.__codexWebuiDebug;
+   // Approval cards belong to the selected thread, not every broadcast session.
+   api.state.active={id:'thread-demo',cwd:api.state.config.defaultCwd,turns:[]};
    api.notify('item/started',{turnId:'turn-demo',item:{id:'cmd-demo',type:'commandExecution',status:'inProgress',command:'bun test tests/codex-surfaces.test.ts'}});
    api.notify('turn/diff/updated',{turnId:'turn-demo',threadId:'thread-demo',diff:'diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1,2 +1,3 @@\n const app = true;\n-old();\n+next();\n+export { next };\n'});
    await api.request({id:'approval-demo',method:'item/commandExecution/requestApproval',params:{threadId:'thread-demo',turnId:'turn-demo',itemId:'cmd-demo',command:'bun test tests/codex-surfaces.test.ts',cwd:globalThis.__codexWebuiDebug.state.config.defaultCwd||'.',reason:'Run the focused test suite to verify the UI changes.',proposedExecpolicyAmendment:['bun','test'],startedAtMs:Date.now()}});
@@ -19,7 +21,6 @@ async function run(width,height,name){
  await page.waitForSelector('.review-file',{state:'attached'});
  await page.click('.approval-menu-toggle');
  await page.click('#toggleSidePanel');
- await page.click('[data-side-panel-action="review"]');
  await page.waitForFunction(()=>!document.querySelector('#reviewPanelContent').hidden);
  await page.waitForSelector('#reviewMode:not([disabled])');
  await page.click('#reviewMode');

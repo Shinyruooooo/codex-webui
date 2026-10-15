@@ -27,7 +27,7 @@ const home=await page.evaluate(()=>{
     placeholder:document.querySelector('#prompt')?.placeholder,
     fixedContextVisible:Boolean(document.querySelector('.composer-context')&&document.querySelector('.composer-context').getBoundingClientRect().height>1),
     contextTrayHidden:document.querySelector('#composerContextTray')?.hidden,
-    controls:[...document.querySelectorAll('.composer-footer [data-composer-control]')].map(node=>node.dataset.composerControl),
+    controls:[...document.querySelectorAll('.composer-footer [data-composer-control]')].filter(node=>!node.hidden).map(node=>node.dataset.composerControl),
     composer:style(composer),send:style(send),trigger:style(trigger),
     triggerText:trigger?.textContent?.replace(/\s+/g,' ').trim(),
     nativeTrigger:trigger?.hasAttribute('data-codex-intelligence-trigger'),
@@ -37,7 +37,7 @@ const contextUsage=await page.evaluate(()=>{
   const api=globalThis.__codexWebuiDebug,initiallyHidden=document.querySelector('#contextUsage').hidden;
   api.state.active={id:'context-thread',cwd:api.state.config.defaultCwd};
   api.notify('thread/tokenUsage/updated',{threadId:'context-thread',tokenUsage:{modelContextWindow:200000,last:{totalTokens:80000}}});
-  const indicator=document.querySelector('#contextUsage'),progress=indicator.querySelector('.context-usage-progress'),dictation=document.querySelector('[data-composer-control="dictation"]');
+  const indicator=document.querySelector('#contextUsage'),progress=indicator.querySelector('.context-usage-progress'),send=document.querySelector('#sendButton');
   return {
     initiallyHidden,
     hidden:indicator.hidden,
@@ -45,7 +45,7 @@ const contextUsage=await page.evaluate(()=>{
     tooltip:indicator.dataset.tooltip,
     dashOffset:getComputedStyle(progress).strokeDashoffset,
     inComposerRight:indicator.parentElement?.classList.contains('composer-right'),
-    beforeDictation:Boolean(indicator.compareDocumentPosition(dictation)&Node.DOCUMENT_POSITION_FOLLOWING),
+    beforeSend:Boolean(indicator.compareDocumentPosition(send)&Node.DOCUMENT_POSITION_FOLLOWING),
   };
 });
 
@@ -91,7 +91,7 @@ const mobileModel=await page.evaluate(()=>{
 console.log(JSON.stringify({home,contextUsage,modelFilter,modelMain,effortSelection,modelSubmenu,lunaEfforts,solEfforts,mobileModel,errors},null,2));
 await browser.close();
 
-const expected=['add','project','approval','model','dictation','send'];
+const expected=['add','project','approval','model','send'];
 if(errors.length
   ||!/^What can I help with in .+\?$/.test(home.heading||'')
   ||home.placeholder!=='Do anything'
@@ -105,7 +105,7 @@ if(errors.length
   ||contextUsage.tooltip!=='Context window:\n40% used (60% left)\n80k / 200k tokens used'
   ||Math.abs(parseFloat(contextUsage.dashOffset)-60)>.1
   ||!contextUsage.inComposerRight
-  ||!contextUsage.beforeDictation
+  ||!contextUsage.beforeSend
   ||/^GPT-/i.test(home.triggerText||'')
   ||modelFilter.hasO3
   ||modelFilter.models.some(model=>!/^gpt(?:[-_.\s]|$)/i.test(model))

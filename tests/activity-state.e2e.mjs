@@ -70,9 +70,17 @@ const threadRestore=await page.evaluate(async()=>{
   return{activeId:state.active?.id,storedId:localStorage.getItem('codex-webui-active-thread'),heading:document.querySelector('#threadTitle')?.textContent?.trim(),selected:document.querySelector('.thread-item.active')?.dataset.id};
 });
 
-const sidebar=await page.evaluate(()=>{
-  const api=globalThis.__codexWebuiDebug,node=document.querySelector('#sidebar'),button=document.querySelector('#toggleSidebar');api.setSidebarOpen(true);const open={hidden:document.body.classList.contains('sidebar-hidden'),width:node.getBoundingClientRect().width,pressed:button.getAttribute('aria-pressed')};api.setSidebarOpen(false);const closed={hidden:document.body.classList.contains('sidebar-hidden'),width:node.getBoundingClientRect().width,shadow:getComputedStyle(node).boxShadow,pressed:button.getAttribute('aria-pressed')};api.setSidebarOpen(true);return{open,closed};
+const sidebarOpen=await page.evaluate(()=>{
+  const api=globalThis.__codexWebuiDebug,node=document.querySelector('#sidebar'),button=document.querySelector('#toggleSidebar');api.setSidebarOpen(true);return{hidden:document.body.classList.contains('sidebar-hidden'),width:node.getBoundingClientRect().width,pressed:button.getAttribute('aria-pressed')};
 });
+const sidebarClosed=await page.evaluate(()=>{
+  const api=globalThis.__codexWebuiDebug,node=document.querySelector('#sidebar'),button=document.querySelector('#toggleSidebar');api.setSidebarOpen(false);return{hidden:document.body.classList.contains('sidebar-hidden'),pressed:button.getAttribute('aria-pressed'),shadow:getComputedStyle(node).boxShadow};
+});
+// 侧栏宽度有 500ms 过渡，必须在动画结束后再量，否则永远量到展开宽度。
+await page.waitForFunction(()=>document.querySelector('#sidebar').getBoundingClientRect().width===0);
+const sidebarCollapsedWidth=await page.evaluate(()=>document.querySelector('#sidebar').getBoundingClientRect().width);
+await page.evaluate(()=>globalThis.__codexWebuiDebug.setSidebarOpen(true));
+const sidebar={open:sidebarOpen,closed:{...sidebarClosed,width:sidebarCollapsedWidth}};
 
 console.log(JSON.stringify({reasoning,groupPersistence,reloadPersistenceBefore,reloadPersistenceAfter,threadRestore,sidebar,errors},null,2));
 await browser.close();

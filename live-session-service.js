@@ -1,4 +1,5 @@
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
+import { normalizeTokenUsage } from "./public/usage.js";
 
 function contentText(content) {
   if (typeof content === "string") return content;
@@ -75,6 +76,7 @@ function newState() {
     userSequence: 0,
     patchSequence: 0,
     lastEventAt: null,
+    tokenUsage: null,
   };
 }
 
@@ -106,6 +108,10 @@ export function applyRolloutEvent(state, event) {
   if (!event || typeof event !== "object") return state;
   if (typeof event.timestamp === "string") state.lastEventAt = event.timestamp;
   const payload = event.payload || {};
+  if (event.type === "event_msg" && payload.type === "token_count" && payload.info) {
+    state.tokenUsage = normalizeTokenUsage(payload.info);
+    return state;
+  }
   if (event.type === "event_msg" && payload.type === "task_started") {
     state.active = true;
     state.itemIndex.clear();
@@ -224,6 +230,7 @@ export class LiveSessionStore {
       return {
         active: entry.state.active,
         lastEventAt: entry.state.lastEventAt,
+        tokenUsage: entry.state.tokenUsage ? structuredClone(entry.state.tokenUsage) : null,
         turn: entry.state.active && entry.state.turn ? structuredClone(entry.state.turn) : null,
       };
     } finally { closeSync(fd); }

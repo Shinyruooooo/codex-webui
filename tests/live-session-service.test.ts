@@ -65,6 +65,48 @@ describe("Desktop-style live session reader", () => {
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
+  test("retains normalized CLI token usage across turns and incremental reads", () => {
+    const directory = mkdtempSync(join(tmpdir(), "codex-live-session-"));
+    const path = join(directory, "rollout.jsonl");
+    const store = new LiveSessionStore();
+    const firstUsage = {
+      total_token_usage: { input_tokens: 120, cached_input_tokens: 20, output_tokens: 30, reasoning_output_tokens: 10, total_tokens: 150 },
+      last_token_usage: { input_tokens: 40, cached_input_tokens: 5, output_tokens: 15, reasoning_output_tokens: 4, total_tokens: 55 },
+      model_context_window: 4096,
+    };
+    const latestUsage = {
+      total_token_usage: { input_tokens: 180, cached_input_tokens: 25, output_tokens: 45, reasoning_output_tokens: 12, total_tokens: 225 },
+      last_token_usage: { input_tokens: 60, cached_input_tokens: "invalid", output_tokens: 15, reasoning_output_tokens: 4, total_tokens: 75 },
+      model_context_window: 8192,
+    };
+    try {
+      writeFileSync(path, line("event_msg", { type: "token_count", info: firstUsage }));
+      appendFileSync(path, line("event_msg", { type: "task_started", turn_id: "turn-token", started_at: 40 }));
+      const beforeAppend = store.read(path);
+      expect(beforeAppend.tokenUsage).toEqual({
+        total: { inputTokens: 120, cachedInputTokens: 20, outputTokens: 30, reasoningOutputTokens: 10, totalTokens: 150 },
+        last: { inputTokens: 40, cachedInputTokens: 5, outputTokens: 15, reasoningOutputTokens: 4, totalTokens: 55 },
+        modelContextWindow: 4096,
+      });
+      beforeAppend.tokenUsage.total.inputTokens = 9999;
+
+      appendFileSync(path,
+        line("event_msg", { type: "token_count", info: latestUsage })
+        + line("event_msg", { type: "token_count", info: null })
+        + line("event_msg", { type: "task_complete", turn_id: "turn-token", completed_at: 41 }),
+      );
+      const completed = store.read(path);
+      expect(completed).toMatchObject({ active: false, turn: null });
+      expect(completed.tokenUsage).toEqual({
+        total: { inputTokens: 180, cachedInputTokens: 25, outputTokens: 45, reasoningOutputTokens: 12, totalTokens: 225 },
+        last: { inputTokens: 60, cachedInputTokens: null, outputTokens: 15, reasoningOutputTokens: 4, totalTokens: 75 },
+        modelContextWindow: 8192,
+      });
+      completed.tokenUsage.last.totalTokens = 0;
+      expect(store.read(path).tokenUsage.last.totalTokens).toBe(75);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
   test("appends CLI steering and file edits once during incremental reads", () => {
     const directory = mkdtempSync(join(tmpdir(), "codex-live-session-"));
     const path = join(directory, "rollout.jsonl");

@@ -1,5 +1,6 @@
-import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve, extname } from "node:path";
+import { gzipSync } from "node:zlib";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { networkInterfaces, tmpdir } from "node:os";
@@ -12,7 +13,7 @@ import { rpcErrorPayload } from "./public/bridge-errors.js";
 import { createTerminalSession, normalizeTerminalResize, resolveTerminalCwd } from "./terminal-service.js";
 import { readWorkspaceContext } from "./workspace-context.js";
 import { searchWorkspaceFiles } from "./file-search.js";
-import { resolveLocalFile } from "./file-service.js";
+import { WORKSPACE_UPLOAD_MAX_BYTES, listWorkspaceDirectory, readWorkspaceFilePreview, resolveLocalFile, saveWorkspaceUpload } from "./file-service.js";
 import { resolveLocalImage } from "./image-service.js";
 import { LiveSessionStore } from "./live-session-service.js";
 import {
@@ -312,6 +313,48 @@ function readJsonBody(req: IncomingMessage, maxBytes = 256_000) {
   });
 }
 
+function readBinaryBody(req: IncomingMessage, maxBytes = WORKSPACE_UPLOAD_MAX_BYTES) {
+  return new Promise<Buffer>((resolvePromise, reject) => {
+    const contentLength = Number(req.headers["content-length"]);
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      req.resume();
+      const err = new Error("Upload is too large") as Error & { statusCode?: number };
+      err.statusCode = 413;
+      reject(err);
+      return;
+    }
+    let chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+    const fail = (message: string, statusCode = 400) => {
+      if (settled) return;
+      settled = true;
+      chunks = [];
+      const err = new Error(message) as Error & { statusCode?: number };
+      err.statusCode = statusCode;
+      reject(err);
+    };
+    req.on("data", (chunk: Buffer) => {
+      if (settled) return;
+      total += chunk.byteLength;
+      if (total > maxBytes) {
+        req.resume();
+        fail("Upload is too large", 413);
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("aborted", () => fail("Upload aborted", 400));
+    req.on("error", error => fail(error.message || "Upload failed", 400));
+    req.on("end", () => {
+      if (settled) return;
+      settled = true;
+      resolvePromise(Buffer.concat(chunks, total));
+      chunks = [];
+    });
+  });
+}
+
 function passwordSetupRequired() {
   return !localhostOnly && !authSecret;
 }
@@ -375,6 +418,50 @@ const mime: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon",
 };
+
+// 静态资源每次都带 ETag 重验，既不会用过期的界面，也避免刷新时重传整个前端包。
+const COMPRESSIBLE_EXTENSIONS = new Set([".html", ".js", ".css", ".json", ".svg"]);
+const staticAssetCache = new Map<string, { etag: string; raw: Buffer; gzip: Buffer | null }>();
+
+function staticAsset(file: string) {
+  const stats = statSync(file);
+  const key = `${file}:${stats.size}:${stats.mtimeMs}`;
+  let cached = staticAssetCache.get(key);
+  if (!cached) {
+    const raw = readFileSync(file);
+    const compressible = COMPRESSIBLE_EXTENSIONS.has(extname(file).toLowerCase());
+    cached = {
+      etag: `"${stats.size.toString(16)}-${Math.round(stats.mtimeMs).toString(16)}"`,
+      raw,
+      gzip: compressible && raw.length > 1024 ? gzipSync(raw, { level: 6 }) : null,
+    };
+    staticAssetCache.clear();
+    staticAssetCache.set(key, cached);
+  }
+  return cached;
+}
+
+function sendStaticAsset(req: IncomingMessage, res: ServerResponse, file: string) {
+  const asset = staticAsset(file);
+  if (req.headers["if-none-match"] === asset.etag) {
+    res.writeHead(304, { etag: asset.etag, "cache-control": "no-cache", "x-content-type-options": "nosniff" });
+    res.end();
+    return;
+  }
+  const acceptsGzip = /\bgzip\b/.test(String(req.headers["accept-encoding"] || ""));
+  const compressed = acceptsGzip && asset.gzip ? asset.gzip : null;
+  const body = compressed || asset.raw;
+  const headers: Record<string, string> = {
+    "content-type": mime[extname(file)] || "application/octet-stream",
+    "cache-control": "no-cache",
+    "content-length": String(body.length),
+    etag: asset.etag,
+    vary: "accept-encoding",
+  };
+  if (compressed) headers["content-encoding"] = "gzip";
+  res.writeHead(200, headers);
+  res.end(body);
+}
 
 const server = createServer(async (req, res) => {
   let url: URL;
@@ -466,8 +553,7 @@ const server = createServer(async (req, res) => {
     if (appRoute || loginAssets.has(url.pathname)) {
       const file = resolvePublicAsset(appRoute ? "/" : url.pathname, publicDir);
       if (file) {
-        res.writeHead(200, { "content-type": mime[extname(file)] || "application/octet-stream", "cache-control": "no-store" });
-        res.end(readFileSync(file));
+        sendStaticAsset(req, res, file);
         return;
       }
     }
@@ -531,6 +617,72 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify(context));
     } catch (error) {
       res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/files/tree") {
+    if (req.method !== "GET") {
+      res.writeHead(405, { "content-type": "application/json; charset=utf-8", allow: "GET", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: "Method not allowed" }));
+      return;
+    }
+    try {
+      const cwd = url.searchParams.get("cwd") || defaultCwd;
+      const path = url.searchParams.get("path") || "";
+      const showHidden = url.searchParams.get("hidden") === "1";
+      const tree = listWorkspaceDirectory(cwd, path, { home: homeDir, allowedRoots: browseRoots, showHidden });
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify(tree));
+    } catch (error) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/files/preview") {
+    if (req.method !== "GET") {
+      res.writeHead(405, { "content-type": "application/json; charset=utf-8", allow: "GET", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: "Method not allowed" }));
+      return;
+    }
+    try {
+      const cwd = url.searchParams.get("cwd") || defaultCwd;
+      const targetPath = url.searchParams.get("path") || "";
+      const preview = readWorkspaceFilePreview(targetPath, { cwd, home: homeDir, allowedRoots: fileRoots });
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify(preview));
+    } catch (error) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/files/upload") {
+    if (req.method !== "POST") {
+      res.writeHead(405, { "content-type": "application/json; charset=utf-8", allow: "POST", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: "Method not allowed" }));
+      return;
+    }
+    try {
+      const cwd = url.searchParams.get("cwd") || defaultCwd;
+      const directory = url.searchParams.get("dir") || "";
+      const filename = url.searchParams.get("filename") || "";
+      const data = await readBinaryBody(req, WORKSPACE_UPLOAD_MAX_BYTES);
+      const uploaded = saveWorkspaceUpload({
+        cwd,
+        directory,
+        filename,
+        data,
+        home: homeDir,
+        allowedRoots: browseRoots,
+        maxBytes: WORKSPACE_UPLOAD_MAX_BYTES,
+      });
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify(uploaded));
+    } catch (error) {
+      const status = typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : /too large/i.test(String(error)) ? 413 : 400;
+      res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
       res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
     }
     return;
@@ -720,8 +872,7 @@ const server = createServer(async (req, res) => {
   if (!file) {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }); res.end("Not found"); return;
   }
-  res.writeHead(200, { "content-type": mime[extname(file)] || "application/octet-stream", "cache-control": "no-store" });
-  res.end(readFileSync(file));
+  sendStaticAsset(req, res, file);
 });
 
 const sseKeepalive = setInterval(() => {

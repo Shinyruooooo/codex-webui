@@ -9,6 +9,8 @@ const BROWSER_RPC_METHODS = new Set([
   "thread/list",
   "thread/read",
   "thread/delete",
+  "thread/name/set",
+  "thread/compact/start",
   "thread/resume",
   "thread/turns/list",
   "host/thread/live",

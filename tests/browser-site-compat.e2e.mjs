@@ -19,8 +19,7 @@ const page=await browser.newPage({viewport:{width:1280,height:760},colorScheme:'
 const errors=[];
 page.on('pageerror',error=>errors.push(error.message));
 await page.goto(base,{waitUntil:'networkidle'});
-await page.click('#toggleSidePanel');
-await page.click('[data-side-panel-action="browser"]');
+await page.evaluate(()=>globalThis.__codexWebuiDebug.openUtilityPanel('browser'));
 await page.fill('#browserUrl',target);
 await page.press('#browserUrl','Enter');
 const frame=page.frameLocator('#browserFrame');

@@ -1,7 +1,7 @@
-# Codex WebUI
+# Codex PiWeb UI
 
 <p align="center">
-  <strong>由真实 Codex app-server 驱动、可在局域网访问的本地 WebUI。</strong>
+  <strong>参考 Pi Web 风格改造、由真实 Codex app-server 驱动的本地/局域网 WebUI（二开版）。</strong>
 </p>
 
 <p align="center">
@@ -11,11 +11,14 @@
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img alt="MIT 许可证" src="https://img.shields.io/github/license/lezi-fun/codex-webui?style=flat-square"></a>
-  <a href="https://github.com/lezi-fun/codex-webui/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/lezi-fun/codex-webui?style=flat-square"></a>
-  <a href="https://github.com/lezi-fun/codex-webui/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/lezi-fun/codex-webui?style=flat-square"></a>
+  <a href="./LICENSE"><img alt="MIT 许可证" src="https://img.shields.io/github/license/Shinyruooooo/codex-webui?style=flat-square"></a>
+  <a href="https://github.com/Shinyruooooo/codex-webui/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/Shinyruooooo/codex-webui?style=flat-square"></a>
+  <a href="https://github.com/Shinyruooooo/codex-webui/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/Shinyruooooo/codex-webui?style=flat-square"></a>
   <a href="https://bun.sh/"><img alt="Bun 1.3 或更高版本" src="https://img.shields.io/badge/Bun-1.3%2B-fbf0df?style=flat-square&amp;logo=bun&amp;logoColor=000"></a>
 </p>
+
+> [!NOTE]
+> **二次开发与致谢说明：** 本项目（**Codex PiWeb UI**）是基于 [`lezi-fun/codex-webui`](https://github.com/lezi-fun/codex-webui)（MIT 许可证）进行的二次开发版本；界面三栏布局（左侧对话/文件树纯图标切换、中间对话与常驻运行状态/Token 统计栏、右侧由左侧唤起的文件预览/终端/Diff 面板）及基础交互体验参考了 [`agegr/pi-web`](https://github.com/agegr/pi-web)（MIT 许可证）。原始项目的版权声明与许可证完整保留在 [`LICENSE`](./LICENSE) 与 [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) 中。
 
 > [!IMPORTANT]
 > 这是一个**非官方社区项目**，与 OpenAI 没有隶属、背书或维护关系。OpenAI、Codex 及相关标识归其各自权利人所有。
@@ -64,7 +67,7 @@ codex
 ## 快速开始
 
 ```bash
-git clone https://github.com/lezi-fun/codex-webui.git
+git clone https://github.com/Shinyruooooo/codex-webui.git
 cd codex-webui
 bun install
 bun run start

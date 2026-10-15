@@ -17,10 +17,8 @@ const initial=await page.evaluate(()=>{
   return {
     topbarHeight:topbar?.getBoundingClientRect().height,
     hasBottomPanelButton:Boolean(document.querySelector('#toggleBottomPanel')),
-    hasSummaryPanelButton:Boolean(document.querySelector('#toggleSummaryPanel')),
+    summaryToggleHidden:document.querySelector('#toggleSummaryPanel')?.hidden??true,
     hasSidePanelButton:Boolean(document.querySelector('#toggleSidePanel')),
-    summaryPanelPressed:document.querySelector('#toggleSummaryPanel')?.getAttribute('aria-pressed'),
-    summaryPanelWidth:document.querySelector('#summaryPanel')?.getBoundingClientRect().width??null,
     summaryPanelHidden:document.querySelector('#summaryPanel')?.hidden??null,
     sidePanelPressed:document.querySelector('#toggleSidePanel')?.getAttribute('aria-pressed'),
     sidePanelWidth:sidePanel?.getBoundingClientRect().width??null,
@@ -42,18 +40,6 @@ const initial=await page.evaluate(()=>{
   };
 });
 
-await page.click('#toggleSummaryPanel');
-await page.waitForFunction(()=>document.querySelector('#summaryPanel')&&!document.querySelector('#summaryPanel').hidden&&document.querySelector('#summaryPanel').getBoundingClientRect().width>0);
-const summary=await page.evaluate(()=>({
-  width:document.querySelector('#summaryPanel').getBoundingClientRect().width,
-  pressed:document.querySelector('#toggleSummaryPanel').getAttribute('aria-pressed'),
-  sections:[...document.querySelectorAll('#summaryPanel .summary-section-title')].map(node=>node.textContent.trim()),
-  unavailable:[...document.querySelectorAll('#summaryPanel .summary-empty')].map(node=>node.textContent.trim()),
-  geometry:(()=>{const panel=document.querySelector('#summaryPanel').getBoundingClientRect(),toolbar=document.querySelector('.summary-panel-toolbar').getBoundingClientRect(),scroll=document.querySelector('.summary-panel-scroll').getBoundingClientRect();return {panelHeight:panel.height,total:toolbar.height+scroll.height,scrollBottom:scroll.bottom,panelBottom:panel.bottom}})(),
-}));
-await page.click('#toggleSummaryPanel');
-await page.waitForFunction(()=>document.querySelector('#summaryPanel').hidden||document.querySelector('#summaryPanel').getBoundingClientRect().width===0);
-
 await page.click('#toggleSidePanel');
 await page.waitForFunction(()=>document.querySelector('#sidePanel')&&!document.querySelector('#sidePanel').hidden&&document.querySelector('#sidePanel').getBoundingClientRect().width>0);
 const opened=await page.evaluate(()=>({
@@ -61,12 +47,13 @@ const opened=await page.evaluate(()=>({
   pressed:document.querySelector('#toggleSidePanel').getAttribute('aria-pressed'),
   title:document.querySelector('#sidePanelTitle')?.textContent?.trim(),
   activeTab:document.querySelector('.side-panel-tab.active')?.textContent?.trim(),
-  launcherActions:[...document.querySelectorAll('.side-panel-launcher-action')].map(node=>node.textContent.trim()),
+  filesVisible:!document.querySelector('#filesPanel')?.hidden,
+  launcherHidden:document.querySelector('#sidePanelLauncher')?.hidden,
   reviewVisible:!document.querySelector('#reviewPanelContent')?.hidden,
   visibleTabs:[...document.querySelectorAll('.side-panel-tab')].filter(node=>node.getClientRects().length).map(node=>node.textContent.trim()),
 }));
 
-await page.click('[data-side-panel-action="review"]');
+await page.evaluate(()=>globalThis.__codexWebuiDebug.openReviewPanel());
 const review=await page.evaluate(()=>({
   activeTab:document.querySelector('.side-panel-tab.active')?.textContent?.trim(),
   reviewVisible:!document.querySelector('#reviewPanelContent')?.hidden,
@@ -77,50 +64,13 @@ const review=await page.evaluate(()=>({
 await page.click('#toggleSidePanel');
 await page.waitForFunction(()=>document.querySelector('#sidePanel').hidden||document.querySelector('#sidePanel').getBoundingClientRect().width===0);
 
-await page.click('#toggleBottomPanel');
-await page.waitForFunction(()=>!document.querySelector('#bottomPanel').hidden&&document.querySelector('#bottomPanel').getBoundingClientRect().height>0);
-const bottomLauncher=await page.evaluate(()=>({
-  pressed:document.querySelector('#toggleBottomPanel').getAttribute('aria-pressed'),
-  title:document.querySelector('#bottomPanelTab')?.textContent?.trim(),
-  launcherHidden:document.querySelector('#bottomPanelLauncher')?.hidden,
-  utilityVisible:!document.querySelector('#bottomPanelUtility')?.hidden,
-}));
-await page.click('[data-bottom-panel-action="terminal"]');
-await page.waitForFunction(()=>document.querySelector('#terminalHost')?.dataset.connected==='true');
-const bottom=await page.evaluate(()=>({
-  pressed:document.querySelector('#toggleBottomPanel').getAttribute('aria-pressed'),
-  title:document.querySelector('#bottomPanelTab')?.textContent?.trim(),
-  launcherHidden:document.querySelector('#bottomPanelLauncher')?.hidden,
-  utilityVisible:!document.querySelector('#bottomPanelUtility')?.hidden,
-  terminalVisible:!document.querySelector('#terminalHost')?.hidden,
-  terminalConnected:document.querySelector('#terminalHost')?.dataset.connected,
-  xterm:Boolean(document.querySelector('#terminalHost .xterm')),
-}));
-await page.click('#closeBottomPanel');
-await page.waitForFunction(()=>document.querySelector('#bottomPanel').hidden);
-await page.click('#toggleBottomPanel');
-await page.click('#bottomPanelTab');
-await page.click('[data-bottom-panel-action="browser"]');
-await page.click('#closeBottomPanel');
-await page.click('#toggleBottomPanel');
-const bottomRestored=await page.evaluate(()=>({
-  title:document.querySelector('#bottomPanelTab')?.textContent?.trim(),
-  launcherHidden:document.querySelector('#bottomPanelLauncher')?.hidden,
-  utilityVisible:!document.querySelector('#bottomPanelUtility')?.hidden,
-}));
-await page.click('#closeBottomPanel');
-
-console.log(JSON.stringify({initial,summary,opened,review,bottomLauncher,bottom,bottomRestored,pageErrors},null,2));
+console.log(JSON.stringify({initial,opened,review,pageErrors},null,2));
 await browser.close();
 
-const expectedActions=['Review','Terminal','Browser','Files','Side task'];
 const valid=pageErrors.length===0
   &&initial.topbarHeight===46
-  &&initial.hasBottomPanelButton
-  &&initial.hasSummaryPanelButton
+  &&initial.summaryToggleHidden===true
   &&initial.hasSidePanelButton
-  &&initial.summaryPanelPressed==='false'
-  &&initial.summaryPanelWidth===0
   &&initial.summaryPanelHidden===true
   &&initial.sidePanelPressed==='false'
   &&initial.sidePanelWidth===0
@@ -134,36 +84,14 @@ const valid=pageErrors.length===0
   &&initial.colors.border
   &&initial.colors.text
   &&initial.hasHardcodedTerminalPlaceholder===false
-  &&summary.width>=280
-  &&summary.pressed==='true'
-  &&JSON.stringify(summary.sections)===JSON.stringify(['Environment','Scheduled','Computer Use','Plan','Side tasks','Sources'])
-  &&summary.unavailable.every(text=>/native|app-server/i.test(text))
-  &&Math.abs(summary.geometry.total-summary.geometry.panelHeight)<1
-  &&summary.geometry.scrollBottom<=summary.geometry.panelBottom+.5
   &&opened.width>=320
   &&opened.pressed==='true'
-  &&opened.title==='New tab'
-  &&opened.activeTab==='New tab'
-  &&JSON.stringify(opened.visibleTabs)===JSON.stringify(['New tab'])
-  &&expectedActions.every(label=>opened.launcherActions.includes(label))
+  &&opened.title==='File preview'
+  &&opened.activeTab==='File preview'
+  &&opened.filesVisible===true
+  &&opened.launcherHidden===true
   &&opened.reviewVisible===false
   &&review.activeTab?.startsWith('Review')
-  &&review.visibleTabs.length===2
-  &&review.visibleTabs[0]==='New tab'
-  &&review.visibleTabs[1]?.startsWith('Review')
   &&review.reviewVisible===true
-  &&review.launcherHidden===true
-  &&bottomLauncher.title==='New tab'
-  &&bottomLauncher.launcherHidden===false
-  &&bottomLauncher.utilityVisible===false
-  &&bottom.pressed==='true'
-  &&bottom.title==='Terminal'
-  &&bottom.launcherHidden===true
-  &&bottom.utilityVisible===false
-  &&bottom.terminalVisible===true
-  &&bottom.terminalConnected==='true'
-  &&bottom.xterm
-  &&bottomRestored.title==='Browser'
-  &&bottomRestored.launcherHidden===true
-  &&bottomRestored.utilityVisible===true;
+  &&review.launcherHidden===true;
 if(!valid)process.exit(1);

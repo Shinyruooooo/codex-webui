@@ -10,12 +10,12 @@ for(const width of [1101,1150,1190]){
   await page.waitForFunction(()=>globalThis.__codexWebuiDebug);
   await page.evaluate(()=>{
     const api=globalThis.__codexWebuiDebug;
+    api.state.active={id:'responsive-thread',cwd:api.state.config.defaultCwd,turns:[]};
     api.notify('turn/diff/updated',{turnId:'responsive-turn',threadId:'responsive-thread',diff:'diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-old();\n+next();\n'});
     document.querySelector('#reviewMode').click();
   });
   await page.click('#toggleSidePanel');
-  await page.click('[data-side-panel-action="review"]');
-  await page.waitForFunction(()=>document.activeElement?.id==='closeSidePanel');
+  await page.waitForFunction(()=>document.activeElement?.id==='closeSidePanel'&&!document.querySelector('#reviewPanelContent').hidden);
   const result=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,mainWidth:document.querySelector('.conversation-shell').getBoundingClientRect().width,panelWidth:document.querySelector('#sidePanel').getBoundingClientRect().width,ariaModal:document.querySelector('#sidePanel').getAttribute('aria-modal'),conversationInert:document.querySelector('.conversation-shell').inert,activeId:document.activeElement?.id}));
   results.push(result);
   await page.close();
@@ -24,10 +24,11 @@ for(const width of [1101,1150,1190]){
 for(const width of [320,360]){
   const page=await browser.newPage({viewport:{width,height:700},isMobile:true,hasTouch:true,colorScheme:'dark'});
   await page.goto(process.env.CODEX_WEBUI_TEST_URL||'http://127.0.0.1:8899',{waitUntil:'networkidle'});
+  await page.evaluate(()=>document.querySelector('#toggleBottomPanel')?.removeAttribute('hidden'));
   await page.click('#toggleBottomPanel');
   const bottom=await page.evaluate(()=>{const panel=document.querySelector('#bottomPanel').getBoundingClientRect();return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,panel,title:document.querySelector('#bottomPanelTab').textContent.trim(),utilityVisible:!document.querySelector('#bottomPanelUtility').hidden}});
   await page.click('#bottomPanelTab');
-  const launcher=await page.evaluate(()=>{const panel=document.querySelector('#bottomPanel').getBoundingClientRect(),buttons=[...document.querySelectorAll('[data-bottom-panel-action]')].map(node=>node.getBoundingClientRect().toJSON());return {title:document.querySelector('#bottomPanelTab').textContent.trim(),visible:!document.querySelector('#bottomPanelLauncher').hidden,buttonsInside:buttons.every(rect=>rect.left>=panel.left&&rect.right<=panel.right)}});
+  const launcher=await page.evaluate(()=>{const panel=document.querySelector('#bottomPanel').getBoundingClientRect(),buttons=[...document.querySelectorAll('[data-bottom-panel-action]')].filter(node=>!node.hidden).map(node=>node.getBoundingClientRect().toJSON());return {title:document.querySelector('#bottomPanelTab').textContent.trim(),visible:!document.querySelector('#bottomPanelLauncher').hidden,buttonsInside:buttons.every(rect=>rect.left>=panel.left&&rect.right<=panel.right)}});
   await page.click('[data-bottom-panel-action="terminal"]');
   await page.waitForFunction(()=>document.querySelector('#terminalHost')?.dataset.connected==='true');
   const terminal=await page.evaluate(()=>({title:document.querySelector('#bottomPanelTab').textContent.trim(),utilityVisible:!document.querySelector('#bottomPanelUtility').hidden,visible:!document.querySelector('#terminalHost').hidden,connected:document.querySelector('#terminalHost').dataset.connected,xterm:Boolean(document.querySelector('#terminalHost .xterm'))}));

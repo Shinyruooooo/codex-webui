@@ -9,7 +9,7 @@ import {
   saveWorkspaceUpload,
   WORKSPACE_TEXT_PREVIEW_MAX_BYTES,
   WORKSPACE_UPLOAD_MAX_BYTES,
-} from "../file-service.js";
+} from "../server/file-service.js";
 
 function temporaryWorkspace() {
   const cwd = mkdtempSync(join(tmpdir(), "codex-webui-workspace-"));

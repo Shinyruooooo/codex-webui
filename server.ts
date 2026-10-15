@@ -5,17 +5,17 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { networkInterfaces, tmpdir } from "node:os";
 import { WebSocketServer, WebSocket } from "ws";
-import { defaultBrowseRoots, isDirectory, listFolders, resolveBrowsePath } from "./folder-service.js";
-import { applyReviewPatch } from "./review-service.js";
-import { ReviewDiffStore, parseReviewPatchRequest } from "./review-state.js";
+import { defaultBrowseRoots, isDirectory, listFolders, resolveBrowsePath } from "./server/folder-service.js";
+import { applyReviewPatch } from "./server/review-service.js";
+import { ReviewDiffStore, parseReviewPatchRequest } from "./server/review-state.js";
 import { unifiedDiffFromFileChanges } from "./public/codex-surfaces.js";
 import { rpcErrorPayload } from "./public/bridge-errors.js";
-import { createTerminalSession, normalizeTerminalResize, resolveTerminalCwd } from "./terminal-service.js";
-import { readWorkspaceContext } from "./workspace-context.js";
-import { searchWorkspaceFiles } from "./file-search.js";
-import { WORKSPACE_UPLOAD_MAX_BYTES, listWorkspaceDirectory, readWorkspaceFilePreview, resolveLocalFile, saveWorkspaceUpload } from "./file-service.js";
-import { resolveLocalImage } from "./image-service.js";
-import { LiveSessionStore } from "./live-session-service.js";
+import { createTerminalSession, normalizeTerminalResize, resolveTerminalCwd } from "./server/terminal-service.js";
+import { readWorkspaceContext } from "./server/workspace-context.js";
+import { searchWorkspaceFiles } from "./server/file-search.js";
+import { WORKSPACE_UPLOAD_MAX_BYTES, listWorkspaceDirectory, readWorkspaceFilePreview, resolveLocalFile, saveWorkspaceUpload } from "./server/file-service.js";
+import { resolveLocalImage } from "./server/image-service.js";
+import { LiveSessionStore } from "./server/live-session-service.js";
 import {
   createPasswordSession,
   createStoredPassword,
@@ -28,15 +28,15 @@ import {
   storedPasswordSessionSecret,
   unauthorizedResponse,
   verifyStoredPassword,
-} from "./server-security.js";
-import { loadStoredPassword, passwordStorePath, saveStoredPassword, type StoredPassword } from "./password-store.js";
+} from "./server/server-security.js";
+import { loadStoredPassword, passwordStorePath, saveStoredPassword, type StoredPassword } from "./server/password-store.ts";
 import {
   createAccountIdentityLoader,
   fetchProfileAvatar,
   isLocalAccountRequest,
   resolveAccountIdentity,
   toPublicAccountIdentity,
-} from "./profile-service.js";
+} from "./server/profile-service.ts";
 
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 8899);

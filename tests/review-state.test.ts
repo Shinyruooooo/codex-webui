@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ReviewDiffStore, parseReviewPatchRequest } from "../review-state.js";
+import { ReviewDiffStore, parseReviewPatchRequest } from "../server/review-state.js";
 
 describe("server-owned review state", () => {
   test("stores app-server diff notifications by thread and turn", () => {

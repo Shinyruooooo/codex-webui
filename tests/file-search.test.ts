@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { searchWorkspaceFiles } from "../file-search.js";
+import { searchWorkspaceFiles } from "../server/file-search.js";
 
 const roots: string[] = [];
 afterEach(async () => { while (roots.length) await rm(roots.pop()!, { recursive: true, force: true }); });

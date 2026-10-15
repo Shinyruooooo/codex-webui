@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { readWorkspaceContext } from '../workspace-context.js';
+import { readWorkspaceContext } from '../server/workspace-context.js';
 
 describe('workspace composer context', () => {
   test('reports the selected folder, local environment, and current git branch', () => {

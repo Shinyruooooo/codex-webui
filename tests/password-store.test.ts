@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createStoredPassword } from "../server-security.js";
-import { loadStoredPassword, passwordStorePath, saveStoredPassword } from "../password-store.js";
+import { createStoredPassword } from "../server/server-security.js";
+import { loadStoredPassword, passwordStorePath, saveStoredPassword } from "../server/password-store.ts";
 
 describe("managed LAN password store", () => {
   test("resolves the configured location", () => {

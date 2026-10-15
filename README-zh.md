@@ -184,12 +184,9 @@ flowchart LR
 
 | 路径 | 职责 |
 | --- | --- |
-| `server.ts` | HTTP、WebSocket、app-server 进程、目录/配置/Review API |
-| `public/app.js` | 浏览器状态、RPC、Thread、审批、Activity、Review、目录切换 |
-| `public/codex-surfaces.js` | 审批模型、Diff 解析、Split 对齐、Activity 摘要 |
-| `public/rendering.js` | 安全 Markdown 和 KaTeX 渲染 |
-| `folder-service.js` | 受限目录浏览 |
-| `review-service.js` | 经过校验的 Git Undo/Reapply |
+| `server.ts` | HTTP、WebSocket、app-server 进程、目录/配置/文件/Review API |
+| `server/` | 后端服务模块：安全鉴权、文件树/预览/上传、CLI rollout 实时解析、PTY 终端、Git Review 补丁 |
+| `public/` | 浏览器前端模块（`app.js`、`usage.js`、`session-tools.js`、`theme.js`、`codex-surfaces.js`、`rendering.js`、`style.css`） |
 | `tests/` | 单元、集成、浏览器、移动端和真实审批测试 |
 
 `public/app.bundle.js` 会在服务启动时自动生成，不提交到 Git。

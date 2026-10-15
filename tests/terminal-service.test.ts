@@ -2,7 +2,7 @@ import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { createTerminalSession, normalizeTerminalResize, resolveTerminalCwd } from '../terminal-service.js';
+import { createTerminalSession, normalizeTerminalResize, resolveTerminalCwd } from '../server/terminal-service.js';
 
 describe('terminal service', () => {
   test('accepts bounded PTY sizes and rejects malformed resize messages', () => {

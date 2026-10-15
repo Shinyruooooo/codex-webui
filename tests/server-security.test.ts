@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createPasswordSession, createStoredPassword, isAllowedBrowserRpcMethod, isRequestAuthorized, parseCookieHeader, resolvePublicAsset, storedPasswordSessionSecret, verifyPasswordSession, verifyStoredPassword } from "../server-security.js";
+import { createPasswordSession, createStoredPassword, isAllowedBrowserRpcMethod, isRequestAuthorized, parseCookieHeader, resolvePublicAsset, storedPasswordSessionSecret, verifyPasswordSession, verifyStoredPassword } from "../server/server-security.js";
 
 describe("WebUI server security boundary", () => {
   test("allows only the RPC methods used by the browser client", () => {

@@ -1,5 +1,5 @@
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
-import { normalizeTokenUsage } from "./public/usage.js";
+import { normalizeTokenUsage } from "../public/usage.js";
 
 function contentText(content) {
   if (typeof content === "string") return content;

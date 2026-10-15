@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listFolders, resolveBrowsePath } from "../folder-service.js";
+import { listFolders, resolveBrowsePath } from "../server/folder-service.js";
 
 describe("folder browser", () => {
   test("lists only visible directories in stable order", () => {

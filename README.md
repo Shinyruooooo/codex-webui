@@ -186,12 +186,9 @@ Main files:
 
 | Path | Responsibility |
 | --- | --- |
-| `server.ts` | HTTP server, WebSocket bridge, app-server process, folder/config/review APIs |
-| `public/app.js` | Browser state, RPC, threads, approvals, activity, Review, project selection |
-| `public/codex-surfaces.js` | Approval models, unified-diff parsing, split alignment, activity summaries |
-| `public/rendering.js` | Sanitized Markdown and KaTeX rendering |
-| `folder-service.js` | Restricted directory browsing |
-| `review-service.js` | Validated Git Undo/Reapply operations |
+| `server.ts` | HTTP server, WebSocket bridge, app-server process, folder/config/file/review APIs |
+| `server/` | Backend services: security, file tree/preview/upload, live rollout parser, PTY terminal, Git review patch |
+| `public/` | Browser UI modules (`app.js`, `usage.js`, `session-tools.js`, `theme.js`, `codex-surfaces.js`, `rendering.js`, `style.css`) |
 | `tests/` | Unit, integration, browser, mobile, and real approval tests |
 
 `public/app.bundle.js` is generated automatically when the server starts and is not committed.

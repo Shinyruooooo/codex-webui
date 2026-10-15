@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { resolveLocalImage } from "../image-service.js";
+import { resolveLocalImage } from "../server/image-service.js";
 
 describe("local agent image boundary", () => {
   test("resolves absolute, relative and file URL image references inside an allowed root", () => {

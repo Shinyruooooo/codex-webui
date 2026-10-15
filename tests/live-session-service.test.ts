@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { LiveSessionStore, parseRollout } from "../live-session-service.js";
+import { LiveSessionStore, parseRollout } from "../server/live-session-service.js";
 
 const line = (type: string, payload: any, timestamp = "2026-08-11T06:26:25.000Z") => JSON.stringify({ timestamp, type, payload }) + "\n";
 

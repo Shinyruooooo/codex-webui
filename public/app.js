@@ -264,7 +264,7 @@ function setRunPhase(threadId,phase,details={}){
   Object.assign(run,details,{phase});
   if(details.event)run.lastEventAt=Date.now();
   if(!RUNNING_PHASES.has(phase)&&run.startedAt)run.endedAt=Date.now();
-  if(phase==='completed')unreadCompletedThreads.add(threadId);
+  if(phase==='completed'&&(details.unread||(details.event&&threadId!==state.active?.id)))unreadCompletedThreads.add(threadId);
   threadRuns.set(threadId,run);
   if(threadId===state.active?.id)renderRuntimeBar();
   if(previous?.phase!==phase)renderThreads();
@@ -589,8 +589,8 @@ function threadVisualStatus(thread){
   if([...pendingApprovals.values()].some(req=>req.params?.threadId===id))return'approval';
   const run=threadRuns.get(id);
   if(run&&RUNNING_PHASES.has(run.phase))return run.phase==='approval'?'approval':'running';
-  if(thread.status?.type==='active')return'running';
-  if(unreadCompletedThreads.has(id)||run?.phase==='completed')return'completed';
+  if(thread.status?.type==='active'||thread.liveActive)return'running';
+  if(unreadCompletedThreads.has(id))return'completed';
   return'idle';
 }
 function renderThreads(){
@@ -632,6 +632,7 @@ function renderThreads(){
   if(!list.children.length)list.innerHTML='<div class="list-state">No matching tasks</div>';
 }
 async function openThread(id,fallbackSummary=null){
+  unreadCompletedThreads.delete(id);
   saveActiveDraft();closeThreadActionsMenu();
   const selectionEpoch=++conversationEpoch;
   const listedSummary=state.threads.find(x=>x.id===id),summary=listedSummary||fallbackSummary,deferTransition=Boolean(fallbackSummary&&!listedSummary);
@@ -728,10 +729,20 @@ function onNotification(method,p){
   // but only render conversation items for the currently selected thread.
   if(p.threadId&&p.threadId!==state.active?.id&&(method.startsWith('item/')||method.startsWith('turn/')||method==='error')){
     if(method==='turn/started')setRunPhase(p.threadId,'waiting',{turnId:p.turn?.id,event:true});
+    else if(method.startsWith('item/')){
+      const bgRun=threadRuns.get(p.threadId),bgThread=state.threads.find(x=>x.id===p.threadId);
+      if(RUNNING_PHASES.has(bgRun?.phase)||bgThread?.status?.type==='active'||bgThread?.liveActive||method==='item/started'){
+        const phase=method==='item/completed'?'waiting':p.item?itemRunPhase(p.item):method.startsWith('item/reasoning/')?'thinking':method.startsWith('item/agentMessage/')?'responding':method.startsWith('item/fileChange/')?'editing':'running';
+        setRunPhase(p.threadId,phase,{turnId:p.turnId||p.turn?.id,event:true});
+      }
+    }
     else if(method==='turn/completed'){
       const phase=p.turn?.status==='failed'?'failed':p.turn?.status==='interrupted'?'stopped':'completed';
-      setRunPhase(p.threadId,phase,{turnId:p.turn?.id,event:true,durationMs:turnDurationMs(p.turn)});
+      setRunPhase(p.threadId,phase,{turnId:p.turn?.id,event:true,unread:phase==='completed',durationMs:turnDurationMs(p.turn)});
       maybeNotifyTaskCompleted(p);void loadRateLimits();
+    }
+    else if(method==='error'&&p.willRetry===false){
+      setRunPhase(p.threadId,'failed',{turnId:p.turnId,error:p.error?.message||p.message||'Codex error',event:true});
     }
     if(method==='turn/completed'||method==='turn/started')refreshThreadsSoon();
     return;
@@ -787,7 +798,7 @@ function approvalIcon(kind){return kind==='network'?codexIcon('globe'):kind==='p
 function approvalBody(model,p){if(model.kind==='exec'||model.kind==='network')return `<div class="approval-command"><code>${escapeHtml(p.command||model.title)}</code></div>`;if(model.kind==='patch'){const review=diffForTurn(p.turnId);return review?.hasChanges?`<button type="button" class="approval-review-link">${codexIcon('fileDiff')}<span>Review ${review.fileCount} changed file${review.fileCount===1?'':'s'}</span><span class="plus">+${review.linesAdded}</span><span class="minus">−${review.linesDeleted}</span></button>`:''}return permissionRows(p.permissions).map(row=>`<div class="permission-row"><span>${escapeHtml(row.label)}</span><code>${escapeHtml(shortPath(row.value))}</code></div>`).join('')}
 function restorePendingApprovals(){for(const req of pendingApprovals.values())if(req.params?.threadId===state.active?.id)onServerRequest(req)}
 function dismissPendingApprovals(threadId,turnId,itemId){for(const [id,req]of pendingApprovals){const p=req.params||{};if(p.threadId===threadId&&p.turnId===turnId&&(!itemId||p.itemId===itemId)){pendingApprovals.delete(id);state.requestCards.get(id)?.remove();state.requestCards.delete(id)}}}
-async function onServerRequest(req){const p=req.params||{};if(['item/commandExecution/requestApproval','item/fileChange/requestApproval','item/permissions/requestApproval'].includes(req.method)){pendingApprovals.set(req.id,req);if(p.threadId&&p.threadId!==state.active?.id)return;if(state.requestCards.get(req.id)?.isConnected)return}if(!['item/commandExecution/requestApproval','item/fileChange/requestApproval','item/permissions/requestApproval'].includes(req.method)){void respondToCodex(req.id,null,{code:-32601,message:'Unsupported request'}).catch(error=>{if(!error?.silentTransportSwitch)toast(error.message)});return}const group=ensureActivity(p.turnId||'approval',$('#conversation'),p.itemId),model=buildApprovalModel(req),card=document.createElement('section');card.className='approval-card';card.dataset.codexApprovalSurface='';card.innerHTML=`<div class="approval-content"><div class="approval-identity">${approvalIcon(model.kind)}<span>${escapeHtml(model.identity)}</span></div><div class="approval-title">${escapeHtml(model.title)}</div>${model.subtitle?`<div class="approval-subtitle">${escapeHtml(shortPath(model.subtitle))}</div>`:''}${model.reason?`<div class="approval-reason"><span>Reason</span><p>${escapeHtml(model.reason)}</p></div>`:''}</div><div class="approval-body">${approvalBody(model,p)}</div><form class="approval-actions">${model.leading?`<button type="button" class="approval-leading">${escapeHtml(model.leading.label)}</button>`:''}<div class="approval-actions-main"><button type="button" class="approval-deny">${escapeHtml(model.deny.label)}</button>${model.scoped?`<div class="approval-split"><button type="submit" class="approval-primary" autofocus>${escapeHtml(model.primary.label)}</button><button type="button" class="approval-menu-toggle" aria-label="Approval options" aria-expanded="false">${codexIcon('chevronDown')}</button><div class="approval-menu" hidden><button type="button" class="approval-scoped">${escapeHtml(model.scoped.label)}</button></div></div>`:`<button type="submit" class="approval-primary" autofocus>${escapeHtml(model.primary.label)}</button>`}</div></form>`;group.after(card);state.requestCards.set(req.id,card);setApprovalWaiting(group,p.itemId,true);setRunPhase(state.active?.id,'approval',{turnId:p.turnId,event:true});const answer=async(decision)=>{const threadId=p.threadId||state.active?.id;setRunPhase(threadId,'waiting',{turnId:p.turnId,event:true});setApprovalWaiting(group,p.itemId,decision!==model.deny.decision);card.querySelectorAll('button').forEach(b=>b.disabled=true);try{await respondToCodex(req.id,model.kind==='permission'?decision:{decision});pendingApprovals.delete(req.id);card.remove();state.requestCards.delete(req.id)}catch(error){card.querySelectorAll('button').forEach(b=>b.disabled=false);setRunPhase(threadId,'approval',{turnId:p.turnId,error:error.message});if(!error?.silentTransportSwitch)toast(error.message)}};card.querySelector('form').onsubmit=e=>{e.preventDefault();answer(model.primary.decision)};card.querySelector('.approval-deny').onclick=()=>answer(model.deny.decision);card.querySelector('.approval-scoped')?.addEventListener('click',()=>answer(model.scoped.decision));card.querySelector('.approval-leading')?.addEventListener('click',()=>answer(model.leading.decision));card.querySelector('.approval-review-link')?.addEventListener('click',()=>openReviewPanel(diffForTurn(p.turnId)));const menuToggle=card.querySelector('.approval-menu-toggle'),menu=card.querySelector('.approval-menu');menuToggle?.addEventListener('click',()=>{const open=menu.hidden;menu.hidden=!open;menuToggle.setAttribute('aria-expanded',String(open))});scrollBottom()}
+async function onServerRequest(req){const p=req.params||{};if(['item/commandExecution/requestApproval','item/fileChange/requestApproval','item/permissions/requestApproval'].includes(req.method)){pendingApprovals.set(req.id,req);if(p.threadId&&p.threadId!==state.active?.id){setRunPhase(p.threadId,'approval',{turnId:p.turnId,event:true});renderThreads();return}if(state.requestCards.get(req.id)?.isConnected)return}if(!['item/commandExecution/requestApproval','item/fileChange/requestApproval','item/permissions/requestApproval'].includes(req.method)){void respondToCodex(req.id,null,{code:-32601,message:'Unsupported request'}).catch(error=>{if(!error?.silentTransportSwitch)toast(error.message)});return}const group=ensureActivity(p.turnId||'approval',$('#conversation'),p.itemId),model=buildApprovalModel(req),card=document.createElement('section');card.className='approval-card';card.dataset.codexApprovalSurface='';card.innerHTML=`<div class="approval-content"><div class="approval-identity">${approvalIcon(model.kind)}<span>${escapeHtml(model.identity)}</span></div><div class="approval-title">${escapeHtml(model.title)}</div>${model.subtitle?`<div class="approval-subtitle">${escapeHtml(shortPath(model.subtitle))}</div>`:''}${model.reason?`<div class="approval-reason"><span>Reason</span><p>${escapeHtml(model.reason)}</p></div>`:''}</div><div class="approval-body">${approvalBody(model,p)}</div><form class="approval-actions">${model.leading?`<button type="button" class="approval-leading">${escapeHtml(model.leading.label)}</button>`:''}<div class="approval-actions-main"><button type="button" class="approval-deny">${escapeHtml(model.deny.label)}</button>${model.scoped?`<div class="approval-split"><button type="submit" class="approval-primary" autofocus>${escapeHtml(model.primary.label)}</button><button type="button" class="approval-menu-toggle" aria-label="Approval options" aria-expanded="false">${codexIcon('chevronDown')}</button><div class="approval-menu" hidden><button type="button" class="approval-scoped">${escapeHtml(model.scoped.label)}</button></div></div>`:`<button type="submit" class="approval-primary" autofocus>${escapeHtml(model.primary.label)}</button>`}</div></form>`;group.after(card);state.requestCards.set(req.id,card);setApprovalWaiting(group,p.itemId,true);setRunPhase(state.active?.id,'approval',{turnId:p.turnId,event:true});const answer=async(decision)=>{const threadId=p.threadId||state.active?.id;setRunPhase(threadId,'waiting',{turnId:p.turnId,event:true});setApprovalWaiting(group,p.itemId,decision!==model.deny.decision);card.querySelectorAll('button').forEach(b=>b.disabled=true);try{await respondToCodex(req.id,model.kind==='permission'?decision:{decision});pendingApprovals.delete(req.id);card.remove();state.requestCards.delete(req.id)}catch(error){card.querySelectorAll('button').forEach(b=>b.disabled=false);setRunPhase(threadId,'approval',{turnId:p.turnId,error:error.message});if(!error?.silentTransportSwitch)toast(error.message)}};card.querySelector('form').onsubmit=e=>{e.preventDefault();answer(model.primary.decision)};card.querySelector('.approval-deny').onclick=()=>answer(model.deny.decision);card.querySelector('.approval-scoped')?.addEventListener('click',()=>answer(model.scoped.decision));card.querySelector('.approval-leading')?.addEventListener('click',()=>answer(model.leading.decision));card.querySelector('.approval-review-link')?.addEventListener('click',()=>openReviewPanel(diffForTurn(p.turnId)));const menuToggle=card.querySelector('.approval-menu-toggle'),menu=card.querySelector('.approval-menu');menuToggle?.addEventListener('click',()=>{const open=menu.hidden;menu.hidden=!open;menuToggle.setAttribute('aria-expanded',String(open))});scrollBottom()}
 const slashCommandCatalog=[
   {id:'model',title:'Model',description:'Choose model and reasoning effort',icon:'wrench'},
   {id:'plan',title:'Plan mode',description:'Turn plan mode on',icon:'list'},
@@ -944,8 +955,24 @@ async function submitPrompt(event){
     syncComposerSubmitState();renderRuntimeBar();
   }
 }
-function threadSummarySignature(threads){return JSON.stringify(threads.map(thread=>[thread.id,thread.updatedAt,thread.recencyAt,thread.status]))}
-function applyThreadSummaries(threads){const nextSignature=threadSummarySignature(threads),changed=nextSignature!==threadListSignature;threadListSignature=nextSignature;state.threads=threads;const summary=state.active&&threads.find(thread=>thread.id===state.active.id);if(summary){const turns=state.active.turns;state.active={...state.active,...summary,turns};if(summary.status?.type==='active')scheduleActiveThreadSync(0)}if(changed)renderThreads()}
+function threadSummarySignature(threads){return JSON.stringify(threads.map(thread=>[thread.id,thread.updatedAt,thread.recencyAt,thread.status,thread.liveActive,thread.liveLastTurnId,thread.liveLastTurnStatus]))}
+function applyThreadSummaries(threads){
+  const hadPrevious=state.threadsLoaded,previousById=new Map(state.threads.map(thread=>[thread.id,thread]));
+  const nextSignature=threadSummarySignature(threads),changed=nextSignature!==threadListSignature;
+  threadListSignature=nextSignature;state.threads=threads;
+  for(const thread of threads){
+    const prev=previousById.get(thread.id),run=threadRuns.get(thread.id),wasRunning=Boolean(prev?.status?.type==='active'||prev?.liveActive||RUNNING_PHASES.has(run?.phase)),nowRunning=Boolean(thread.status?.type==='active'||thread.liveActive);
+    if(!nowRunning&&RUNNING_PHASES.has(run?.phase)&&pendingSubmission?.threadId!==thread.id&&![...pendingApprovals.values()].some(req=>req.params?.threadId===thread.id)){
+      const terminalPhase=thread.liveLastTurnStatus==='failed'?'failed':thread.liveLastTurnStatus==='interrupted'?'stopped':'completed';
+      setRunPhase(thread.id,terminalPhase,{turnId:thread.liveLastTurnId||run?.turnId,unread:terminalPhase==='completed'&&thread.id!==state.active?.id});
+    }else if(hadPrevious&&wasRunning&&!nowRunning&&thread.id!==state.active?.id&&thread.liveLastTurnStatus==='completed'){
+      unreadCompletedThreads.add(thread.id);
+    }
+  }
+  const summary=state.active&&threads.find(thread=>thread.id===state.active.id);
+  if(summary){const turns=state.active.turns;state.active={...state.active,...summary,turns};if(summary.status?.type==='active'||summary.liveActive)scheduleActiveThreadSync(0)}
+  if(changed)renderThreads();
+}
 function scheduleThreadListRefresh(delay=THREAD_LIST_POLL_MS){clearTimeout(threadListTimer);threadListTimer=setTimeout(refreshThreadList,document.visibilityState==='hidden'?Math.max(delay,8000):delay)}
 async function refreshThreadList(){if(threadListInFlight){scheduleThreadListRefresh(1000);return}threadListInFlight=true;try{const result=await rpc('thread/list',{limit:50,sortKey:'recency_at',sortDirection:'desc'});applyThreadSummaries(result.data||[])}catch{}finally{threadListInFlight=false;scheduleThreadListRefresh()}}
 function refreshThreadsSoon(){scheduleThreadListRefresh(600)}

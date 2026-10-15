@@ -129,11 +129,23 @@ export function applyRolloutEvent(state, event) {
     return state;
   }
   if (!state.turn) return state;
-  if (event.type === "event_msg" && payload.type === "task_complete" && payload.turn_id === state.turn.id) {
+  if (event.type === "event_msg" && payload.type === "task_complete" && (!payload.turn_id || payload.turn_id === state.turn.id)) {
     state.active = false;
     state.turn.status = "completed";
     if (Number.isFinite(payload.completed_at)) state.turn.completedAt = payload.completed_at;
+    if (Number.isFinite(payload.duration_ms)) state.turn.durationMs = payload.duration_ms;
     for (const item of state.turn.items) if (item.status === "inProgress") item.status = "completed";
+    state.activeCommandId = null;
+    return state;
+  }
+  if (event.type === "event_msg" && payload.type === "turn_aborted" && (!payload.turn_id || payload.turn_id === state.turn.id)) {
+    state.active = false;
+    state.turn.status = payload.reason === "failed" || payload.reason === "error" ? "failed" : "interrupted";
+    if (Number.isFinite(payload.completed_at)) state.turn.completedAt = payload.completed_at;
+    if (Number.isFinite(payload.duration_ms)) state.turn.durationMs = payload.duration_ms;
+    for (const item of state.turn.items) {
+      if (item.status === "inProgress") item.status = state.turn.status;
+    }
     state.activeCommandId = null;
     return state;
   }
@@ -231,6 +243,8 @@ export class LiveSessionStore {
         active: entry.state.active,
         lastEventAt: entry.state.lastEventAt,
         tokenUsage: entry.state.tokenUsage ? structuredClone(entry.state.tokenUsage) : null,
+        lastTurnId: entry.state.turn?.id || null,
+        lastTurnStatus: entry.state.turn?.status || null,
         turn: entry.state.active && entry.state.turn ? structuredClone(entry.state.turn) : null,
       };
     } finally { closeSync(fd); }

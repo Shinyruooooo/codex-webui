@@ -129,8 +129,15 @@ try{
   await p.waitForFunction(()=>document.querySelector('#runtimeFooter').dataset.phase==='responding');
   f.emit('turn/completed',{threadId:'new-thread',turn:{id:'new-turn',status:'completed'}});
   await p.waitForFunction(()=>document.querySelector('#runtimeFooter').dataset.phase==='completed');
-  assert.equal(await p.locator('.thread-item[data-id="new-thread"]').getAttribute('data-thread-status'),'completed');
-  assert.equal(await p.locator('.thread-item[data-id="new-thread"] .thread-status-dot.is-completed').count(),1);
+  // Active thread is already being viewed: its sidebar item goes back to idle (no permanent unread dot).
+  assert.equal(await p.locator('.thread-item[data-id="new-thread"]').getAttribute('data-thread-status'),'idle');
+  assert.equal(await p.locator('.thread-item[data-id="new-thread"] .thread-status-dot.is-completed').count(),0);
+  // Background thread completion shows the unread dot until first opened, then clears it permanently.
+  f.emit('turn/started',{threadId:'cli-thread',turn:{id:'bg-turn',status:'inProgress'}});
+  assert.equal(await p.locator('.thread-item[data-id="cli-thread"]').getAttribute('data-thread-status'),'running');
+  f.emit('turn/completed',{threadId:'cli-thread',turn:{id:'bg-turn',status:'completed'}});
+  assert.equal(await p.locator('.thread-item[data-id="cli-thread"]').getAttribute('data-thread-status'),'completed');
+  assert.equal(await p.locator('.thread-item[data-id="cli-thread"] .thread-status-dot.is-completed').count(),1);
   assert.equal(await p.locator('#sendButton').getAttribute('data-submit-mode'),'send');
   // Native history hydration may emit late item completions after turn/completed.
   f.emit('item/completed',{threadId:'new-thread',turnId:'new-turn',item:{id:'answer',type:'agentMessage',text:'Final answer'}});
@@ -140,6 +147,12 @@ try{
   await p.screenshot({path:artifact('runtime-feedback-ipad.png')});
   reports.push({scenario:'immediate-send-stream-usage',feedbackMs,tokens:await p.locator('#runtimeTokenSummary').textContent(),errors:f.errors});
   // A background approval is retained, not discarded, and reappears on selection.
+  await p.locator('#toggleSidebar').tap();
+  // Clicking the completed background thread clears its unread dot on first entry.
+  await p.locator('[data-id="cli-thread"]').tap();
+  await p.waitForFunction(()=>globalThis.__codexWebuiDebug.state.active?.id==='cli-thread');
+  assert.equal(await p.locator('.thread-item[data-id="cli-thread"]').getAttribute('data-thread-status'),'idle');
+  assert.equal(await p.locator('.thread-item[data-id="cli-thread"] .thread-status-dot.is-completed').count(),0);
   await p.locator('#toggleSidebar').tap();await p.locator('[data-id="other-thread"]').tap();
   await p.waitForSelector('[data-codex-approval-surface]');
   await p.locator('.approval-deny').tap();

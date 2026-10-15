@@ -239,6 +239,32 @@ function recordThreadPathsFromRpc(result: any) {
   }
 }
 
+function resolveThreadRolloutPath(rawPath: unknown) {
+  if (typeof rawPath !== "string" || !rawPath) return null;
+  const child = relative(codexSessionsRoot, resolve(rawPath));
+  return child && !child.startsWith("..") ? resolveSafeRegularFile(codexSessionsRoot, child) : null;
+}
+
+function enrichThreadsWithLiveRollout(result: any) {
+  const threads = [result?.thread, ...(Array.isArray(result?.data) ? result.data : [])].filter(Boolean);
+  for (const thread of threads) {
+    if (typeof thread?.id !== "string") continue;
+    const rawPath = typeof thread?.path === "string" ? thread.path : threadPaths.get(thread.id);
+    if (typeof rawPath === "string") threadPaths.set(thread.id, rawPath);
+    const safePath = resolveThreadRolloutPath(rawPath);
+    if (!safePath) continue;
+    try {
+      const live = liveSessions.read(safePath);
+      thread.liveActive = Boolean(live.active);
+      thread.liveLastTurnId = live.lastTurnId || null;
+      thread.liveLastTurnStatus = live.lastTurnStatus || null;
+      if (live.active && thread.status?.type !== "active") {
+        thread.status = { type: "active", activeFlags: [] };
+      }
+    } catch { /* Ignore unreadable or transient rollout files. */ }
+  }
+}
+
 async function readLiveThread(threadId: unknown) {
   if (typeof threadId !== "string" || !threadId) throw new Error("Invalid thread id");
   let path = threadPaths.get(threadId);
@@ -248,8 +274,7 @@ async function readLiveThread(threadId: unknown) {
     path = threadPaths.get(threadId);
   }
   if (!path) return { active: false, turn: null, lastEventAt: null };
-  const child = relative(codexSessionsRoot, resolve(path));
-  const safePath = child && !child.startsWith("..") ? resolveSafeRegularFile(codexSessionsRoot, child) : null;
+  const safePath = resolveThreadRolloutPath(path);
   if (!safePath) throw new Error("Thread rollout is outside the Codex sessions directory");
   return liveSessions.read(safePath);
 }
@@ -270,6 +295,9 @@ async function dispatchBrowserMessage(message: any) {
         ? await readLiveThread(params.threadId)
         : await request(message.method, params);
       recordThreadPathsFromRpc(result);
+      if (message.method === "thread/list" || message.method === "thread/read" || message.method === "thread/resume") {
+        enrichThreadsWithLiveRollout(result);
+      }
       recordReviewDiffsFromRpc(message.method, params, result);
       return { type: "rpc/result", id, result };
     } catch (error) {

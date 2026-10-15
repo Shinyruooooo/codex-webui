@@ -61,7 +61,29 @@ describe("Desktop-style live session reader", () => {
       appendFileSync(path, line("response_item", { type: "custom_tool_call_output", call_id: "call-2", output: [{ type: "input_text", text: "Script completed\nWall time 1.0 seconds\nOutput:\n" }, { type: "input_text", text: '{"exit_code":0,"output":"2 pass\\n"}' }] }));
       expect(store.read(path).turn.items[0]).toMatchObject({ status: "completed", aggregatedOutput: "2 pass\n", exitCode: 0 });
       appendFileSync(path, line("event_msg", { type: "task_complete", turn_id: "turn-2", completed_at: 22 }));
-      expect(store.read(path)).toMatchObject({ active: false, turn: null });
+      expect(store.read(path)).toMatchObject({ active: false, turn: null, lastTurnId: "turn-2", lastTurnStatus: "completed" });
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  test("marks a turn aborted in rollout as inactive and interrupted so stuck CLI sessions clear", () => {
+    const directory = mkdtempSync(join(tmpdir(), "codex-live-session-"));
+    const path = join(directory, "rollout.jsonl");
+    const store = new LiveSessionStore();
+    try {
+      writeFileSync(path,
+        line("event_msg", { type: "task_started", turn_id: "turn-abort", started_at: 50 })
+        + line("response_item", { type: "custom_tool_call", id: "tool-a", call_id: "call-a", name: "exec", input: 'const r=await tools.exec_command({cmd:"sleep 30"}); text(r);' }),
+      );
+      expect(store.read(path)).toMatchObject({ active: true, lastTurnId: "turn-abort", lastTurnStatus: "inProgress" });
+      appendFileSync(path, line("event_msg", {
+        type: "turn_aborted",
+        turn_id: "turn-abort",
+        reason: "interrupted",
+        started_at: 50,
+        completed_at: 65,
+        duration_ms: 15000,
+      }));
+      expect(store.read(path)).toMatchObject({ active: false, turn: null, lastTurnId: "turn-abort", lastTurnStatus: "interrupted" });
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 

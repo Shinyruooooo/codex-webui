@@ -29,23 +29,16 @@ Codex WebUI 直接连接 `codex app-server --stdio`，通过响应式浏览器�
 
 ## 主要功能
 
-- 通过 WebSocket 桥接真实 `codex app-server --stdio`
-- 真实模型目录、推理强度、历史 Thread 和流式 Turn
-- 命令、文件修改、网络和权限审批框
-- 支持 **Allow once**、**Allow similar commands** 和会话级授权
-- 工具动画和执行状态由真实 item/turn 通知驱动
-- Unified / Split Diff、自动换行、全部展开/收起、Undo 和 Reapply
-- 安全的 Markdown、GFM、代码块、链接和 KaTeX
-- 带目录边界检查的项目文件夹选择器
-- Codex 风格的侧栏账号身份，支持姓名、同源代理头像 fallback 和套餐
-- Codex Desktop 风格的 46px 顶栏，分别提供 Bottom Panel、Summary 和 Task Side Panel 控制；Bottom Panel 打开官方式 New tab 启动页
-- 基于 xterm.js 的真实 Bottom Panel PTY 终端，支持 256 色 ANSI、窗口尺寸同步，以及 Vim/控制键交互
-- 默认收起的 Summary 面板，对齐原生 Environment、Scheduled、Computer Use、Plan、Side tasks 和 Sources 区块；app-server 可提供的数据会真实展示，仅原生 store 可提供的区块使用明确的不可用或空状态，不会伪造内容
-- 默认收起的 Task Side Panel，复刻官方 New tab 启动页：Review 打开真实 Diff，Files 连接受限项目选择器；其中仅原生桥接支持的 Terminal、Browser 和 Side task 会明确提示当前不可用，不会伪造工具界面
-- 使用统一 Codex 风格 token 的浅色/深色界面，以及灰色透明背景的单色 Codex Knot
-- 长会话窗口化，避免一次渲染数千条 Turn
-- 桌面与移动端响应式布局，手机端使用全屏 Summary 与 Task Side Panel 抽屉
-- 默认只监听 localhost；局域网访问需显式启用认证
+- **对齐 Pi Web 的三栏工作台布局**：
+  - **左侧边栏（纯图标切换）**：支持 **会话列表**（固定项目分组与会话顺序、运行中旋转指示器、待审批/未读完成圆点）与 **项目文件树**（浏览目录、悬浮 `@` 一键引用文件、上传文件），并提供一键打开右侧 **终端** 按钮；采用手动开关与挤压自适应布局，展开时不遮挡中间对话
+  - **中间对话区与精简状态栏**：流式渲染回答与工具调用时间线、发送即时乐观反馈，底部常驻纯图标状态指示器、耗时计时器、精简 Token 摘要（`↑输入 ↓输出 · 上下文%`）及 `5h` / `Weekly` 剩余额度（点击可展开完整明细）
+  - **右侧面板**：由左侧文件树、终端按钮或 Diff Review 按需唤起，提供真实 **文件预览**（Markdown/代码/图片）、**PTY 终端**（`xterm.js` 256 色、尺寸同步、Vim/控制键支持）与 **Diff Review**（Unified / Split 视图、自动换行、Git Undo / Reapply）
+- 通过 WebSocket（支持自动降级 SSE）桥接真实 `codex app-server --stdio`
+- 支持真实模型目录、推理强度、会话重命名（`thread/name/set`）、上下文压缩（`thread/compact/start`）、Markdown/JSON 导出及按会话草稿持久化
+- 对齐 Pi Web 的 `@` 文件引用自动补全（输入 `@` 立即列出当前项目文件与文件夹、支持 `@folder/` 逐级下钻、带空格路径自动加引号、支持粘贴/拖拽上传附件）
+- 命令、文件修改、网络和权限审批框（支持 **Allow once**、**Allow similar commands** 和会话级授权）
+- 设置面板精简为真实可用的 5 个页面（`通用`、`外观`、`配置`、`个人资料`、`键盘快捷键`），支持 **跟随系统 / 浅色 / 深色** 主题切换
+- 默认只监听 localhost；局域网访问需显式启用认证（`scrypt` 密码存储、`HttpOnly` 签名会话 Cookie 及按 IP 登录限流保护）
 
 ## 环境要求
 
@@ -137,9 +130,10 @@ Codex WebUI 可以在本机批准执行命令和修改文件，应把它视为�
 
 - 不要把 `8899` 端口直接暴露到公网。
 - 默认只监听 `127.0.0.1`。监听非 localhost 地址时，必须先完成首次密码设置，或配置 `CODEX_WEBUI_PASSWORD` / `CODEX_WEBUI_ACCESS_TOKEN`，受保护的 HTTP 与 WebSocket 请求才会放行。
-- 浏览器 RPC 使用明确白名单，无法调用 app-server 的 `fs/*`、`config/*` 或账号方法。
-- 静态文件使用资源白名单，并拒绝所有符号链接。
-- 文件夹浏览会 canonicalize 路径，拒绝通过 symlink 逃逸用户 Home 目录。
+- 浏览器 RPC 使用明确白名单，服务端统一校验 `cwd` 参数目录边界，且无法调用 app-server 的 `fs/*`、`config/*` 或账号方法。
+- 静态文件使用资源白名单（支持 `ETag` 与 gzip 压缩缓存重验），并拒绝所有符号链接。
+- 文件夹浏览、文件预览、下载、图片加载和上传均会 canonicalize 路径并通过 `O_NOFOLLOW` + inode/device 校验真实文件描述符，防止通过 symlink 或 TOCTOU 竞态逃逸允许的根目录。
+- `/api/auth/login` 接口内置按 IP 的失败次数限流与冷却机制，防止局域网密码暴力枚举。
 - Review Undo/Reapply 只使用服务端持有的 app-server Diff，拒绝客户端提交 `cwd`/Diff、符号链接补丁和 `.git`、`.env`、`node_modules` 等敏感目标。
 - 允许命令前认真阅读审批内容。
 - 账号身份由 app-server 的 `account/read` 与 Codex 已登录的 profile endpoint 聚合，仅允许本机 localhost 直接访问；LAN 客户端显示中性的 Settings fallback。邮箱和原始头像 URL 不会暴露，头像经同源白名单代理加载，`auth.json` token 始终只留在服务端。

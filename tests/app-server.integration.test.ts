@@ -155,6 +155,8 @@ describe("Codex WebUI app-server bridge", () => {
       await expect(rpc("fs/readFile", { path: probe })).rejects.toThrow(/not available|not allowed/i);
       await expect(rpc("fs/writeFile", { path: writeProbe, dataBase64: Buffer.from("blocked").toString("base64") })).rejects.toThrow(/not available|not allowed/i);
       await expect(rpc("config/read", {})).rejects.toThrow(/not available|not allowed/i);
+      await expect(rpc("permissionProfile/list", { cwd: "/etc" })).rejects.toThrow(/outside the allowed roots/i);
+      await expect(rpc("thread/start", { cwd: "/etc" })).rejects.toThrow(/outside the allowed roots/i);
       expect(Bun.file(writeProbe).size).toBe(0);
     } finally {
       rmSync(probe, { force: true });
@@ -184,9 +186,15 @@ describe("Codex WebUI app-server bridge", () => {
   });
 
   test("streams a harmless real turn to completion", async () => {
+    const modelsResult = await rpc("model/list", { limit: 50 });
+    const catalog = Array.isArray(modelsResult?.data) ? modelsResult.data : [];
+    const chosen = catalog.find((entry: any) => entry?.isDefault) || catalog[0] || { model: "gpt-6.1-sol", defaultReasoningEffort: "low" };
+    const model = chosen.model || chosen.id || "gpt-6.1-sol";
+    const supportedEfforts = (chosen.supportedReasoningEfforts || []).map((item: any) => item?.reasoningEffort).filter(Boolean);
+    const effort = supportedEfforts.includes("low") ? "low" : chosen.defaultReasoningEffort || supportedEfforts[0] || "medium";
     const started = await rpc("thread/start", {
       cwd: ROOT,
-      model: "gpt-5.4-mini",
+      model,
       approvalPolicy: "never",
       sandbox: "read-only",
       ephemeral: true,
@@ -196,8 +204,8 @@ describe("Codex WebUI app-server bridge", () => {
     const turn = await rpc("turn/start", {
       threadId,
       input: [{ type: "text", text: "Reply with exactly WEBUI_OK and do not use tools." }],
-      model: "gpt-5.4-mini",
-      effort: "low",
+      model,
+      effort,
       approvalPolicy: "never",
     });
     const turnId = turn.turn.id;

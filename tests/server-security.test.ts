@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createPasswordSession, createStoredPassword, isAllowedBrowserRpcMethod, isRequestAuthorized, parseCookieHeader, resolvePublicAsset, storedPasswordSessionSecret, verifyPasswordSession, verifyStoredPassword } from "../server/server-security.js";
+import { createLoginRateLimiter, createPasswordSession, createStoredPassword, isAllowedBrowserRpcMethod, isRequestAuthorized, parseCookieHeader, resolvePublicAsset, storedPasswordSessionSecret, verifyPasswordSession, verifyStoredPassword } from "../server/server-security.js";
 
 describe("WebUI server security boundary", () => {
   test("allows only the RPC methods used by the browser client", () => {
@@ -79,5 +79,20 @@ describe("WebUI server security boundary", () => {
     expect(isRequestAuthorized({ remoteAddress: "192.168.2.40", hostHeader: "192.168.2.10:8899", authorization: null, accessToken: "correct horse", cookie, now: 1_700_000_030_000 })).toBe(true);
     expect(isRequestAuthorized({ remoteAddress: "192.168.2.40", hostHeader: "192.168.2.10:8899", authorization: null, accessToken: "correct horse", cookie, now: 1_700_000_060_001 })).toBe(false);
     expect(isRequestAuthorized({ remoteAddress: "192.168.2.40", hostHeader: "192.168.2.10:8899", authorization: null, accessToken: "correct horse", cookie, origin: "https://evil.example", now: 1_700_000_030_000 })).toBe(false);
+  });
+
+  test("rate-limits repeated failed login attempts by IP and resets on success", () => {
+    const limiter = createLoginRateLimiter({ maxFailures: 3, windowMs: 60_000, cooldownMs: 30_000 });
+    const now = 1_700_000_000_000;
+    expect(limiter.check("::ffff:192.168.1.50", now)).toEqual({ allowed: true, retryAfterSeconds: 0 });
+    expect(limiter.recordFailure("192.168.1.50", now)).toEqual({ blocked: false, retryAfterSeconds: 0 });
+    expect(limiter.recordFailure("192.168.1.50", now + 1000)).toEqual({ blocked: false, retryAfterSeconds: 0 });
+    expect(limiter.recordFailure("192.168.1.50", now + 2000)).toEqual({ blocked: true, retryAfterSeconds: 30 });
+    expect(limiter.check("192.168.1.50", now + 5000)).toEqual({ allowed: false, retryAfterSeconds: 27 });
+    expect(limiter.check("192.168.1.51", now + 5000)).toEqual({ allowed: true, retryAfterSeconds: 0 });
+    expect(limiter.check("192.168.1.50", now + 33_000)).toEqual({ allowed: true, retryAfterSeconds: 0 });
+    limiter.recordFailure("192.168.1.50", now + 34_000);
+    limiter.reset("192.168.1.50");
+    expect(limiter.check("192.168.1.50", now + 34_500)).toEqual({ allowed: true, retryAfterSeconds: 0 });
   });
 });

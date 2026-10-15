@@ -129,6 +129,13 @@ function openVerifiedRegularFile(file, allowedRoots) {
   }
 }
 
+export function openVerifiedLocalFile(input, options = {}) {
+  const file = resolveLocalFile(input, options);
+  const allowedRoots = options.allowedRoots || [options.home || process.env.HOME || process.cwd()];
+  const opened = openVerifiedRegularFile(file, allowedRoots);
+  return { ...file, fd: opened.fd, size: opened.size };
+}
+
 function writeAllSync(fd, bytes) {
   let offset = 0;
   while (offset < bytes.length) {

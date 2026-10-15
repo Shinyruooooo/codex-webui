@@ -29,23 +29,16 @@ Codex WebUI connects directly to `codex app-server --stdio` and exposes the loca
 
 ## Highlights
 
-- Real `codex app-server --stdio` bridge over WebSocket
-- Real model catalog, reasoning effort options, threads, and streaming turns
-- Command, file-change, network, and permission approval surfaces
-- Approval scopes such as **Allow once**, **Allow similar commands**, and session-level approval
-- Tool activity states driven by real item/turn notifications
-- Unified and split diff review, word wrap, expand/collapse, Undo, and Reapply
-- Safe Markdown, GFM, fenced code blocks, links, and KaTeX rendering
-- Project-folder picker with restricted filesystem browsing
-- Codex-style sidebar account identity with display name, same-origin avatar fallback, and plan
-- Codex Desktop-style 46px header with separate Bottom Panel, Summary, and Task Side Panel controls; the Bottom Panel opens its native-style New tab launcher
-- Real Bottom Panel PTY terminal powered by xterm.js, with 256-color ANSI output, terminal resize, and interactive Vim/control-key support
-- Collapsed-by-default Summary panel matching the native Environment, Scheduled, Computer Use, Plan, Side tasks, and Sources sections; app-server data is shown when available and native-store-only sections use explicit unavailable or empty states instead of fabricated content
-- Collapsed-by-default Task Side Panel mirroring the native New tab launcher: Review opens the real diff, Files links to the restricted project picker, and its native-bridge-only Terminal, Browser, and Side task entries show an explicit availability notice instead of a simulated tool
-- Light and dark surfaces driven by shared Codex-style color tokens, including the monochrome transparent Codex Knot
-- Windowed long conversations instead of rendering thousands of turns at once
-- Responsive desktop and mobile layouts with full-screen Summary and Task Side Panel drawers on phones
-- Localhost-only by default; authenticated LAN access is opt-in
+- **Pi Web-style 3-column workspace**:
+  - **Left Sidebar**: Icon-only switcher between **Sessions** (stable project grouping + live running spinner / approval & unread completion dots) and **Files** (project file tree, hover `@` mention, upload), plus a one-click **Terminal** trigger; manual toggle with adaptive push layout that never covers conversations
+  - **Center Conversation**: Real streaming turns, tool activity timeline, immediate optimistic submit feedback, and a compact runtime footer (icon-only status indicator, elapsed timer, compact `↑in ↓out · ctx%` token summary, and `5h` / `Weekly` remaining quota with expandable details)
+  - **Right Side Panel**: Invoked directly from left-side actions or review triggers for **File preview** (Markdown/code/image), **PTY Terminal** (`xterm.js` 256-color + resize + Vim/control keys), and **Diff Review** (Unified/Split diff, word wrap, Git Undo/Reapply)
+- Real `codex app-server --stdio` bridge over WebSocket with automatic SSE fallback
+- Real model catalog, reasoning effort options, thread rename (`thread/name/set`), context compaction (`thread/compact/start`), Markdown/JSON export, and per-session draft persistence
+- Pi Web-aligned `@` file mention autocomplete (immediate file/folder list on `@`, folder trailing-slash drilldown `@folder/`, quoted paths with spaces, paste/drag/upload attachments)
+- Command, file-change, network, and permission approval surfaces (**Allow once**, **Allow similar commands**, session-level approval)
+- Explicit **System / Light / Dark** theme selector in Settings (`General`, `Appearance`, `Configuration`, `Profile`, `Keyboard shortcuts`)
+- Localhost-only by default; authenticated LAN access is opt-in with `scrypt` password storage, `HttpOnly` signed session cookies, and per-IP login rate limiting
 
 ## Requirements
 
@@ -139,9 +132,10 @@ Codex WebUI can approve command execution and file changes on your machine. Trea
 
 - Do **not** expose port `8899` directly to the public Internet.
 - The default listener is `127.0.0.1`. A non-localhost listener requires first-run password setup, `CODEX_WEBUI_PASSWORD`, or `CODEX_WEBUI_ACCESS_TOKEN` before protected HTTP and WebSocket requests are accepted.
-- Browser RPC uses an explicit allowlist and cannot invoke app-server `fs/*`, `config/*`, or account methods.
-- Static serving uses an asset allowlist and rejects symbolic links.
-- Filesystem browsing canonicalizes paths and rejects symlinks that escape the user's home directory.
+- Browser RPC uses an explicit allowlist, validates `cwd` parameters against allowed workspace roots, and cannot invoke app-server `fs/*`, `config/*`, or account methods.
+- Static serving uses an asset allowlist with `ETag` + gzip revalidation and rejects symbolic links.
+- Filesystem browsing, file preview, download, image serving, and uploads canonicalize paths and verify regular file descriptors (`O_NOFOLLOW` + inode/device checks) to prevent symlink and TOCTOU escapes.
+- Login attempts on `/api/auth/login` are rate-limited per IP to mitigate brute-force attacks on LAN deployments.
 - Review Undo/Reapply uses server-owned app-server diffs, rejects client-supplied `cwd`/diff data, symbolic-link patches, and sensitive targets such as `.git`, `.env`, and `node_modules`.
 - Read approval prompts before allowing commands.
 - Account identity combines app-server `account/read` data with Codex's authenticated profile endpoint. It is available only through direct localhost access; LAN clients receive the neutral Settings fallback. Email and raw avatar URLs are not exposed, avatars use a same-origin allowlisted proxy, and `auth.json` tokens remain server-only.

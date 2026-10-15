@@ -210,3 +210,56 @@ export function isAuthorizedHttpRequest(req, accessToken, allowLoopback = true) 
     allowLoopback,
   });
 }
+
+export function createLoginRateLimiter({
+  maxFailures = 5,
+  windowMs = 60_000,
+  cooldownMs = 30_000,
+} = {}) {
+  const attempts = new Map();
+  const normalizeKey = key => String(key || "unknown").replace(/^::ffff:/, "").toLowerCase();
+
+  function prune(now) {
+    if (attempts.size < 256) return;
+    for (const [k, entry] of attempts) {
+      if (entry.blockedUntil <= now && now - entry.firstFailureAt > windowMs) attempts.delete(k);
+    }
+  }
+
+  return {
+    check(rawKey, now = Date.now()) {
+      prune(now);
+      const key = normalizeKey(rawKey);
+      const entry = attempts.get(key);
+      if (!entry) return { allowed: true, retryAfterSeconds: 0 };
+      if (entry.blockedUntil > now) {
+        return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((entry.blockedUntil - now) / 1000)) };
+      }
+      if (now - entry.firstFailureAt > windowMs) {
+        attempts.delete(key);
+      }
+      return { allowed: true, retryAfterSeconds: 0 };
+    },
+    recordFailure(rawKey, now = Date.now()) {
+      const key = normalizeKey(rawKey);
+      const current = attempts.get(key);
+      if (!current || now - current.firstFailureAt > windowMs) {
+        const count = 1;
+        const blockedUntil = count >= maxFailures ? now + cooldownMs : 0;
+        attempts.set(key, { count, firstFailureAt: now, blockedUntil });
+        return { blocked: blockedUntil > now, retryAfterSeconds: blockedUntil > now ? Math.ceil(cooldownMs / 1000) : 0 };
+      }
+      current.count += 1;
+      if (current.count >= maxFailures) {
+        current.blockedUntil = now + cooldownMs;
+      }
+      return {
+        blocked: current.blockedUntil > now,
+        retryAfterSeconds: current.blockedUntil > now ? Math.max(1, Math.ceil((current.blockedUntil - now) / 1000)) : 0,
+      };
+    },
+    reset(rawKey) {
+      attempts.delete(normalizeKey(rawKey));
+    },
+  };
+}

@@ -1,4 +1,4 @@
-import { lstatSync, realpathSync, statSync } from "node:fs";
+import { closeSync, constants as fsConstants, fstatSync, lstatSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { basename, extname, isAbsolute, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -52,12 +52,37 @@ export function resolveLocalImage(input, {
   const metadata = lstatSync(candidate);
   if (metadata.isSymbolicLink() || !metadata.isFile()) throw new Error("Image not found");
   const path = realpathSync(candidate);
-  if (!roots.some(root => inside(path, root))) throw new Error("Image is outside allowed roots");
+  if (path !== candidate || !roots.some(root => inside(path, root))) throw new Error("Image is outside allowed roots");
+  const realStat = statSync(path);
+  if (!realStat.isFile() || realStat.ino !== metadata.ino || realStat.dev !== metadata.dev) throw new Error("Image not found");
 
   const contentType = IMAGE_TYPES.get(extname(path).toLowerCase());
   if (!contentType) throw new Error("Unsupported image type");
-  const size = statSync(path).size;
+  const size = realStat.size;
   if (size > maxBytes) throw new Error("Image is too large");
 
-  return { path, contentType, size, filename: basename(path) };
+  return { path, contentType, size, filename: basename(path), ino: realStat.ino, dev: realStat.dev };
+}
+
+export function readVerifiedLocalImage(input, options = {}) {
+  const image = resolveLocalImage(input, options);
+  const allowedRoots = options.allowedRoots || [options.home || process.env.HOME || process.cwd()];
+  const flags = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW || 0);
+  const fd = openSync(image.path, flags);
+  try {
+    const stat = fstatSync(fd);
+    const currentReal = realpathSync(image.path);
+    const postStat = lstatSync(image.path);
+    const roots = canonicalRoots(allowedRoots);
+    if (!stat.isFile() || postStat.isSymbolicLink() || stat.ino !== image.ino || stat.dev !== image.dev || postStat.ino !== stat.ino || postStat.dev !== stat.dev || currentReal !== image.path || !roots.some(root => inside(currentReal, root))) {
+      throw new Error("Image changed during read");
+    }
+    const maxBytes = Number.isFinite(options.maxBytes) ? options.maxBytes : LOCAL_IMAGE_MAX_BYTES;
+    if (stat.size > maxBytes) throw new Error("Image is too large");
+    const bytes = Buffer.allocUnsafe(stat.size);
+    const read = stat.size > 0 ? readSync(fd, bytes, 0, bytes.length, 0) : 0;
+    return { ...image, size: read, bytes: bytes.subarray(0, read) };
+  } finally {
+    closeSync(fd);
+  }
 }

@@ -28,7 +28,11 @@ const nextWorkspaceName=await page.locator('#projectName').textContent();
 const nextHeading=await page.locator('#emptyState h1').textContent();
 await page.evaluate(()=>{const root=document.querySelector('#conversation');root.innerHTML=`<div class="message-text" id="smokeMarkdown">${globalThis.__renderAssistantMarkdown(['## Formula','','Inline $E=mc^2$','','```js','const x = 1;','```'].join(String.fromCharCode(10)))}</div>`});
 await page.waitForFunction(() => Boolean(document.querySelector('#smokeMarkdown h2') && document.querySelector('#smokeMarkdown .katex') && document.querySelector('#smokeMarkdown pre code')));
-const markdown={heading:await page.locator('#smokeMarkdown h2').count(),katex:await page.locator('#smokeMarkdown .katex').count(),code:await page.locator('#smokeMarkdown pre code').count()};
+const markdown=await page.evaluate(() => ({
+  heading:document.querySelectorAll('#smokeMarkdown h2').length,
+  katex:document.querySelectorAll('#smokeMarkdown .katex').length,
+  code:document.querySelectorAll('#smokeMarkdown pre code').length,
+}));
 await page.screenshot({path:artifact('browser-smoke.png'),fullPage:false});
 console.log(JSON.stringify({dialogAfterNewTask,folders,confirmEnabled,selectedPath,workspaceName,nextWorkspaceName,nextHeading,markdown,errors},null,2));
 await browser.close();

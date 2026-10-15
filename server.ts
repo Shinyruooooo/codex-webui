@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { closeSync, createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve, extname } from "node:path";
 import { gzipSync } from "node:zlib";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -13,10 +13,11 @@ import { rpcErrorPayload } from "./public/bridge-errors.js";
 import { createTerminalSession, normalizeTerminalResize, resolveTerminalCwd } from "./server/terminal-service.js";
 import { readWorkspaceContext } from "./server/workspace-context.js";
 import { searchWorkspaceFiles } from "./server/file-search.js";
-import { WORKSPACE_UPLOAD_MAX_BYTES, listWorkspaceDirectory, readWorkspaceFilePreview, resolveLocalFile, saveWorkspaceUpload } from "./server/file-service.js";
-import { resolveLocalImage } from "./server/image-service.js";
+import { WORKSPACE_UPLOAD_MAX_BYTES, listWorkspaceDirectory, openVerifiedLocalFile, readWorkspaceFilePreview, resolveLocalFile, saveWorkspaceUpload } from "./server/file-service.js";
+import { readVerifiedLocalImage, resolveLocalImage } from "./server/image-service.js";
 import { LiveSessionStore } from "./server/live-session-service.js";
 import {
+  createLoginRateLimiter,
   createPasswordSession,
   createStoredPassword,
   isAllowedBrowserRpcMethod,
@@ -38,6 +39,7 @@ import {
   toPublicAccountIdentity,
 } from "./server/profile-service.ts";
 
+const APP_VERSION = "0.4.0";
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 8899);
 const accessToken = process.env.CODEX_WEBUI_ACCESS_TOKEN || null;
@@ -58,10 +60,11 @@ if (projectless && !configuredReviewRoot) {
   throw new Error("CODEX_WEBUI_REVIEW_ROOT is required when CODEX_WEBUI_PROJECTLESS=true");
 }
 const defaultCwd = resolve(process.env.CODEX_WEBUI_CWD || (projectless ? homeDir : appRoot));
-const browseRoots = defaultBrowseRoots(homeDir);
+const reviewRoots = [resolve(configuredReviewRoot || defaultCwd)];
+const browseRoots = [...new Set([...defaultBrowseRoots(homeDir), defaultCwd, ...reviewRoots])];
 const imageRoots = [...new Set([...browseRoots, resolve(tmpdir()), resolve("/tmp")])];
 const fileRoots = [...new Set([...browseRoots, defaultCwd, resolve(tmpdir()), resolve("/tmp")])];
-const reviewRoots = [resolve(configuredReviewRoot || defaultCwd)];
+const loginRateLimiter = createLoginRateLimiter();
 const clients = new Set<WebSocket>();
 const sseClients = new Set<ServerResponse>();
 const terminalSessions = new Map<WebSocket, ReturnType<typeof createTerminalSession>>();
@@ -85,15 +88,43 @@ const accountLoader = createAccountIdentityLoader(async (refresh) => {
 function startCodex() {
   if (shuttingDown) return;
   if (codex && codex.exitCode === null) return;
-  const child = spawn("codex", ["app-server", "--stdio"], {
-    cwd: defaultCwd,
-    env: process.env,
-    stdio: ["pipe", "pipe", "pipe"],
-    detached: process.platform !== "win32",
-  });
+  const spawnCwd = isDirectory(defaultCwd) ? defaultCwd : isDirectory(homeDir) ? homeDir : process.cwd();
+  let child: ChildProcessWithoutNullStreams;
+  try {
+    child = spawn("codex", ["app-server", "--stdio"], {
+      cwd: spawnCwd,
+      env: process.env,
+      stdio: ["pipe", "pipe", "pipe"],
+      detached: process.platform !== "win32",
+    });
+  } catch (error) {
+    console.error("[codex-webui] failed to spawn codex app-server:", error);
+    connected = false;
+    broadcast({ type: "bridge/status", status: "disconnected", code: null, signal: null });
+    if (!shuttingDown && !restartTimer) restartTimer = setTimeout(() => { restartTimer = null; startCodex(); }, 2000);
+    return;
+  }
   codex = child;
   connected = false;
   stdoutBuffer = "";
+  let exited = false;
+  const handleDown = (code: number | null, signal: NodeJS.Signals | null, reason = "Codex app-server exited") => {
+    if (exited) return;
+    exited = true;
+    connected = false;
+    accountLoader.invalidate();
+    reviewDiffs.clear();
+    broadcast({ type: "bridge/status", status: "disconnected", code, signal });
+    for (const item of pending.values()) item.reject(new Error(reason));
+    pending.clear();
+    if (codex === child) codex = null;
+    if (shuttingDown) maybeFinishShutdown();
+    else if (!restartTimer) restartTimer = setTimeout(() => { restartTimer = null; startCodex(); }, 1000);
+  };
+  child.on("error", (error) => {
+    console.error("[codex app-server] process error:", error instanceof Error ? error.message : String(error));
+    handleDown(null, null, `Codex app-server error: ${error instanceof Error ? error.message : String(error)}`);
+  });
   child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => {
     stdoutBuffer += chunk;
@@ -109,17 +140,7 @@ function startCodex() {
   });
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (data) => console.error("[codex app-server]", String(data).trimEnd()));
-  child.on("exit", (code, signal) => {
-    connected = false;
-    accountLoader.invalidate();
-    reviewDiffs.clear();
-    broadcast({ type: "bridge/status", status: "disconnected", code, signal });
-    for (const item of pending.values()) item.reject(new Error("Codex app-server exited"));
-    pending.clear();
-    if (codex === child) codex = null;
-    if (shuttingDown) maybeFinishShutdown();
-    else restartTimer = setTimeout(startCodex, 1000);
-  });
+  child.on("exit", (code, signal) => handleDown(code, signal));
   initialize().catch((error) => {
     console.error("[codex-webui] initialize failed", error);
     terminateCodex();
@@ -163,7 +184,7 @@ function request(method: string, params: any = {}) {
 
 async function initialize() {
   const result = await request("initialize", {
-    clientInfo: { name: "codex-webui", title: "Codex WebUI", version: "0.2.0" },
+    clientInfo: { name: "codex-piweb-ui", title: "Codex PiWeb UI", version: APP_VERSION },
     capabilities: { experimentalApi: true },
   });
   sendRaw({ method: "initialized", params: {} });
@@ -285,12 +306,27 @@ function broadcast(data: any) {
   for (const client of sseClients) if (!client.writableEnded) client.write(`data: ${text}\n\n`);
 }
 
+function sanitizeBrowserRpcParams(method: string, rawParams: any) {
+  const params = rawParams && typeof rawParams === "object" ? { ...rawParams } : {};
+  if (params.cwd !== undefined && params.cwd !== null) {
+    if (typeof params.cwd !== "string" || !params.cwd.trim()) {
+      throw new Error("Working directory must be a non-empty string");
+    }
+    const resolved = resolveBrowsePath(params.cwd, browseRoots, homeDir);
+    if (!isDirectory(resolved)) throw new Error("Working directory is not an available directory");
+    params.cwd = resolved;
+  } else if (method === "thread/start" && !projectless) {
+    params.cwd = resolveBrowsePath(defaultCwd, browseRoots, homeDir);
+  }
+  return params;
+}
+
 async function dispatchBrowserMessage(message: any) {
   const id = message?.id;
   if (message?.type === "rpc") {
     try {
       if (!isAllowedBrowserRpcMethod(message.method)) throw new Error("RPC method is not available to browser clients");
-      const params = message.params || {};
+      const params = sanitizeBrowserRpcParams(message.method, message.params);
       const result = message.method === "host/thread/live"
         ? await readLiveThread(params.threadId)
         : await request(message.method, params);
@@ -563,17 +599,30 @@ const server = createServer(async (req, res) => {
       sendAuthError(res, 405, "Method not allowed", { allow: "POST" });
       return;
     }
+    const clientIp = req.socket.remoteAddress || "unknown";
+    const rate = loginRateLimiter.check(clientIp);
+    if (!rate.allowed) {
+      sendAuthError(res, 429, "Too many login attempts. Please try again shortly.", { "retry-after": String(rate.retryAfterSeconds) });
+      return;
+    }
     let payload: any;
     try { payload = await readJsonBody(req, 4096); }
     catch {
+      loginRateLimiter.recordFailure(clientIp);
       sendAuthError(res, 401, "Incorrect password");
       return;
     }
     const submittedPassword = typeof payload?.password === "string" ? payload.password : "";
     if (!validBrowserPassword(req, submittedPassword)) {
-      sendAuthError(res, 401, "Incorrect password");
+      const failure = loginRateLimiter.recordFailure(clientIp);
+      if (failure.blocked) {
+        sendAuthError(res, 429, "Too many login attempts. Please try again shortly.", { "retry-after": String(failure.retryAfterSeconds) });
+      } else {
+        sendAuthError(res, 401, "Incorrect password");
+      }
       return;
     }
+    loginRateLimiter.reset(clientIp);
     issueBrowserSession(req, res);
     return;
   }
@@ -630,7 +679,7 @@ const server = createServer(async (req, res) => {
   }
   if (url.pathname === "/api/health") {
     res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-    res.end(JSON.stringify({ ok: true, codex: connected, version: "0.2.0" }));
+    res.end(JSON.stringify({ ok: true, codex: connected, version: APP_VERSION }));
     return;
   }
   if (url.pathname === "/api/config") {
@@ -734,25 +783,28 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify({ error: "Method not allowed" }));
       return;
     }
+    let opened: ReturnType<typeof openVerifiedLocalFile> | null = null;
     try {
-      const file = resolveLocalFile(url.searchParams.get("path"), {
+      opened = openVerifiedLocalFile(url.searchParams.get("path"), {
         cwd: url.searchParams.get("cwd") || defaultCwd,
         home: homeDir,
         allowedRoots: fileRoots,
       });
       res.writeHead(200, {
         "content-type": "application/octet-stream",
-        "content-length": String(file.size),
-        "content-disposition": `attachment; filename="download"; filename*=UTF-8''${encodeContentDispositionFilename(file.filename)}`,
+        "content-length": String(opened.size),
+        "content-disposition": `attachment; filename="download"; filename*=UTF-8''${encodeContentDispositionFilename(opened.filename)}`,
         "cache-control": "no-store",
         "cross-origin-resource-policy": "same-origin",
         "x-content-type-options": "nosniff",
       });
-      const stream = createReadStream(file.path);
+      const stream = createReadStream("", { fd: opened.fd, autoClose: true });
+      opened = null;
       stream.on("error", () => res.destroy());
       req.on("aborted", () => stream.destroy());
       stream.pipe(res);
     } catch {
+      if (opened?.fd !== undefined) { try { closeSync(opened.fd); } catch {} }
       res.writeHead(404, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
       res.end(JSON.stringify({ error: "File unavailable" }));
     }
@@ -765,7 +817,7 @@ const server = createServer(async (req, res) => {
       return;
     }
     try {
-      const image = resolveLocalImage(url.searchParams.get("path"), {
+      const image = readVerifiedLocalImage(url.searchParams.get("path"), {
         cwd: url.searchParams.get("cwd") || defaultCwd,
         home: homeDir,
         allowedRoots: imageRoots,
@@ -778,7 +830,7 @@ const server = createServer(async (req, res) => {
         "cross-origin-resource-policy": "same-origin",
         "x-content-type-options": "nosniff",
       });
-      res.end(readFileSync(image.path));
+      res.end(image.bytes);
     } catch {
       res.writeHead(404, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
       res.end(JSON.stringify({ error: "Image unavailable" }));

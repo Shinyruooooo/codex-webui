@@ -83,6 +83,12 @@ describe("composer autocomplete", () => {
     expect(getComposerAutocomplete("explain /plan", 13)).toBeNull();
   });
 
+  test("recognizes Codex dollar skill selectors without confusing currency", () => {
+    expect(getComposerAutocomplete("use $demo-skill")).toEqual({ type: "skill", query: "demo-skill", start: 4, end: 15 });
+    expect(getComposerAutocomplete("$")).toEqual({ type: "skill", query: "", start: 0, end: 1 });
+    expect(getComposerAutocomplete("$50 USD")).toBeNull();
+  });
+
   test("recognizes an at mention at the cursor and replaces only that token", () => {
     const match = getComposerAutocomplete("review @pack next", 12);
     expect(match).toEqual({ type: "mention", query: "pack", quoted: false, start: 7, end: 12 });

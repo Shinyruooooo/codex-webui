@@ -56,6 +56,7 @@
         <div class="sidebar-view-tabs" role="tablist" aria-label="Sidebar view">
           <button class="sidebar-view-tab active" id="sidebarTabSessions" type="button" role="tab" title="Chats" aria-label="Chats" aria-selected="true" data-sidebar-tab="sessions"><span class="icon-slot" data-icon="messageSquare"></span><span class="sr-only">Chats</span></button>
           <button class="sidebar-view-tab" id="sidebarTabFiles" type="button" role="tab" title="Files" aria-label="Files" aria-selected="false" data-sidebar-tab="files"><span class="icon-slot" data-icon="folderOpen"></span><span class="sr-only">Files</span></button>
+          <button class="sidebar-view-tab" id="sidebarTabSkills" type="button" role="tab" title="Skills" aria-label="Skills" aria-selected="false" data-sidebar-tab="skills"><span class="icon-slot" data-icon="sparkles"></span><span class="sr-only">Skills</span></button>
         </div>
         <button class="sidebar-toolbar-button" id="sidebarTerminalButton" type="button" title="Open terminal" aria-label="Open terminal"><span class="icon-slot" data-icon="terminal"></span></button>
         <button class="sidebar-toolbar-button" id="sidebarSearchButton" type="button" title="Search" aria-label="Search chats" aria-expanded="false" aria-controls="sidebarSearchPanel"><span class="icon-slot" data-icon="search"></span></button>
@@ -81,6 +82,21 @@
         <button class="icon-button small" id="filesChooseProjectButton" type="button" title="Switch project folder" aria-label="Switch project folder"><span class="icon-slot" data-icon="folderOpen"></span></button>
       </div>
       <div class="files-tree-list" id="filesTreeList"><div class="panel-empty">Select a project folder to browse files.</div></div>
+    </div>
+    <div class="sidebar-scroll sidebar-skills-section" id="sidebarSkillsSection" hidden>
+      <div class="skills-toolbar">
+        <div class="skills-filter-tabs" role="tablist" aria-label="Skill category">
+          <button class="skills-filter-tab active" id="skillsFilterOfficial" type="button" role="tab" aria-selected="true" data-skills-filter="official">Official <span id="skillsOfficialCount">0</span></button>
+          <button class="skills-filter-tab" id="skillsFilterPersonal" type="button" role="tab" aria-selected="false" data-skills-filter="personal">Personal <span id="skillsPersonalCount">0</span></button>
+        </div>
+        <button class="icon-button small" id="skillsNewButton" type="button" title="New personal skill" aria-label="New personal skill"><span class="icon-slot" data-icon="plus"></span></button>
+        <button class="icon-button small" id="skillsRefreshButton" type="button" title="Refresh skills" aria-label="Refresh skills"><span class="icon-slot" data-icon="refreshCw"></span></button>
+      </div>
+      <label class="skills-search-box">
+        <span class="icon-slot" data-icon="search"></span>
+        <input id="skillsSearchInput" type="search" placeholder="Search skills…" aria-label="Search skills">
+      </label>
+      <div class="skills-list" id="skillsList"><div class="panel-empty">Loading skills…</div></div>
     </div>
     <div class="sidebar-footer">
       <div class="account-menu" id="accountMenu" hidden>
@@ -237,6 +253,32 @@
         <div class="files-preview-body" id="filesPreviewBody"><div class="panel-empty">Select a file from the left sidebar to preview it here.</div></div>
       </div>
     </section>
+    <section class="side-panel-skills" id="skillsPanel" role="tabpanel" hidden aria-label="Skill inspector">
+      <div class="skills-inspector">
+        <div class="files-preview-toolbar skills-inspector-toolbar">
+          <div class="skills-inspector-heading">
+            <strong id="skillInspectorTitle">Skill</strong>
+            <span class="skill-scope-badge" id="skillInspectorBadge">Official</span>
+          </div>
+          <div class="files-preview-actions">
+            <button class="files-action-button" id="skillInspectorUseButton" type="button" hidden>Use in prompt</button>
+            <button class="files-action-button" id="skillInspectorInstallButton" type="button" hidden>Install</button>
+            <button class="files-action-button" id="skillInspectorEditButton" type="button" hidden>Edit</button>
+            <button class="files-action-button" id="skillInspectorSaveButton" type="button" hidden>Save</button>
+            <button class="files-action-button danger" id="skillInspectorDeleteButton" type="button" hidden>Delete</button>
+          </div>
+        </div>
+        <div class="skills-inspector-meta" id="skillInspectorPath"></div>
+        <div class="files-preview-body skills-inspector-body" id="skillInspectorBody"><div class="panel-empty">Select a skill from the left sidebar to view or edit its instructions.</div></div>
+        <div class="skills-editor-wrap" id="skillEditorWrap" hidden>
+          <div class="skills-create-fields" id="skillCreateFields" hidden>
+            <label class="skills-field"><span>Skill ID (kebab-case)</span><input id="skillCreateNameInput" type="text" placeholder="my-custom-skill" spellcheck="false" autocomplete="off"></label>
+            <label class="skills-field"><span>Description</span><input id="skillCreateDescInput" type="text" placeholder="When Codex should use this skill and what workflow it owns"></label>
+          </div>
+          <textarea class="skills-editor-textarea" id="skillEditorTextarea" spellcheck="false" aria-label="Skill Markdown content"></textarea>
+        </div>
+      </div>
+    </section>
     <section class="side-panel-utility" id="utilityPanelContent" role="tabpanel" hidden>
       <div class="side-panel-utility-empty"><span class="icon-slot" id="utilityPanelIcon"></span><h2 id="utilityPanelTitle"></h2><p id="utilityPanelDescription"></p><button id="utilityPanelAction" type="button" hidden></button></div>
     </section>
@@ -315,6 +357,7 @@
         </label>
         <div class="settings-row"><span><strong>Selected mode</strong><small>Permission mode used for new turns</small></span><span id="settingsPermissionValue">Ask for approval</span></div>
         <div class="settings-row"><span><strong>Project</strong><small>Working folder used for new chats</small></span><span id="settingsProjectValue"></span></div>
+        <div class="settings-row"><span><strong>Skills</strong><small>Official and personal skills for Codex</small></span><button class="files-action-button" id="settingsSkillsButton" type="button">Manage skills</button></div>
         <div class="settings-section-title settings-section-spaced">Notifications</div>
         <label class="settings-row settings-toggle-row" id="settingsTaskNotifyRow">
           <span><strong>Task notifications</strong><small id="settingsTaskNotifyDescription">Show a browser notification when a task completes</small></span>

@@ -84,6 +84,7 @@ async function createClient(browser, name, origin, notificationMode, mobile) {
       '/api/auth/status': { authenticated: true, setupRequired: false, passwordRequired: false },
       '/api/config': { home: '/home/test', defaultCwd: '/workspace', projectless: false },
       '/api/account': { type: 'unknown', displayName: null, initials: '?' },
+      '/api/skills/catalog': { skills: [], curated: [], errors: [], extraRoots: [] },
       '/api/workspace/context': { cwd: '/workspace', project: 'workspace', environment: 'Local', branch: 'test' },
     }[url.pathname];
     assert.ok(data, `Unexpected endpoint: ${url.pathname}`);

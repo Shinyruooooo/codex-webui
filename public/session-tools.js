@@ -81,8 +81,18 @@ export function buildConversationInput({ text = "", mentions = [], attachments =
   }
 
   const mentionPaths = new Set();
+  const skillPaths = new Set();
   for (const item of Array.isArray(mentions) ? mentions : []) {
     if (!item || typeof item !== "object") continue;
+    if (item.type === "skill") {
+      const path = item.path;
+      const name = item.name || item.title;
+      if (typeof path === "string" && path && typeof name === "string" && name && !skillPaths.has(path)) {
+        skillPaths.add(path);
+        input.push({ type: "skill", name, path });
+      }
+      continue;
+    }
     if (item.type && item.type !== "file" && item.type !== "folder") continue;
     if (typeof item.path !== "string" || !item.path) continue;
     const name = item.title || item.name;

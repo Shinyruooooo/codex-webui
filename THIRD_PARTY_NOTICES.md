@@ -8,6 +8,10 @@ This repository (**Codex PiWeb UI**) is a secondary development (derivative work
 
 The three-column workspace layout (left sidebar icon switcher for Chats / Files, center conversation dock with persistent runtime status & token usage bar, and right panel for file preview / PTY terminal / diff review) and core workspace ergonomics are inspired by [`@agegr/pi-web`](https://github.com/agegr/pi-web) (MIT License). No `@agegr/pi-web` source files are bundled in this repository.
 
+## Skills interaction inspiration (`@deepseek-ai/dsh`)
+
+The Skills cards, instruction inspection, and slash-selection interaction are inspired by the locally inspected DeepSeek Harness (`@deepseek-ai/dsh`, MIT, Copyright (c) 2026 DeepSeek). This project implements its own vanilla JavaScript UI and Codex app-server integration; no DSH packages or bundles are shipped. Curated skill bundles remain in the user's Codex cache and retain their own licenses when explicitly installed; they are not included in this repository.
+
 ## Lucide
 
 The interface icons in `public/codex-icons.js` use the exact Lucide icon path data bundled with the locally installed Codex.app (`lucide-react` 0.456.0).

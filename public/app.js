@@ -22,6 +22,8 @@ const state = { ws:null, events:null, transport:'connecting', wsFallbackTimer:nu
 let pendingSubmission=null,conversationEpoch=0,runtimeTick=null,localRun=null,promptComposing=false;
 const MAX_CLIENT_UPLOAD_BYTES=25*1024*1024;
 const fileBrowserState={cwd:'',dir:'',parent:null,entries:[],preview:null,requestId:0,previewRequestId:0,sidebarTab:'sessions'};
+const skillsState={filter:'official',query:'',cwd:'',personalRoot:'',extraRoots:[],errors:[],skills:[],curated:[],selected:null,editing:false,creating:false,requestId:0,inspectRequestId:0};
+const skillMutations=new Set();
 const threadRuns=new Map();
 const unreadCompletedThreads=new Set();
 const pendingApprovals=new Map(),interruptingTurns=new Set();
@@ -139,6 +141,7 @@ function scheduleInitialLoadRetry(){
 // 而且失败后要能自行重试，不要求用户手动刷新页面。
 async function loadInitial(refreshAccount=false){
   loadAccount(refreshAccount);
+  void loadSkillsCatalog();
   const [models,threads,profiles,rateLimits]=await Promise.allSettled([
     rpc('model/list',{limit:50}),
     rpc('thread/list',{limit:50,sortKey:'recency_at',sortDirection:'desc'}),
@@ -381,16 +384,18 @@ function refreshComposerPlaceholder(){const followUpType=state.active?(state.act
 function setWorkspace(path){const name=path.split('/').filter(Boolean).at(-1)||path,resolved=path.replace(/^~/,state.config.home);workspaceContextRequestGate.next();state.projectless=false;state.workspaceContext={cwd:resolved,project:name,environment:'Local',branch:null};$('#projectPath').textContent=shortPath(path);$('#projectName').textContent=name;localStorage.setItem('codex-webui-project',path);syncProjectControl();if(!state.active)showEmpty();if(!$('#summaryPanel').hidden)syncSummaryPanel();if(fileBrowserState.cwd&&fileBrowserState.cwd!==resolved)closeFilePreview();if(fileBrowserState.sidebarTab==='files')void loadWorkspaceFiles('');syncWorkspaceContext(resolved);if(state.connected)loadPermissionProfiles()}
 function setProjectless(){workspaceContextRequestGate.next();state.projectless=true;state.workspaceContext=null;$('#projectPath').textContent='~';$('#projectName').textContent=t('Tasks');localStorage.setItem('codex-webui-project','~');syncProjectControl();if(!state.active){$('#threadPath').textContent='';showEmpty()}if(!$('#summaryPanel').hidden)syncSummaryPanel();closeFilePreview();if(fileBrowserState.sidebarTab==='files')renderWorkspaceFiles();if(state.connected)loadPermissionProfiles()}
 function setSidebarView(tab='sessions'){
-  const files=tab==='files';
-  fileBrowserState.sidebarTab=files?'files':'sessions';
-  $('#sidebarSessionsSection').hidden=files;
-  $('#sidebarFilesSection').hidden=!files;
+  const resolved=tab==='files'?'files':tab==='skills'?'skills':'sessions';
+  fileBrowserState.sidebarTab=resolved;
+  $('#sidebarSessionsSection').hidden=resolved!=='sessions';
+  $('#sidebarFilesSection').hidden=resolved!=='files';
+  $('#sidebarSkillsSection').hidden=resolved!=='skills';
   for(const button of document.querySelectorAll('[data-sidebar-tab]')){
-    const selected=button.dataset.sidebarTab===fileBrowserState.sidebarTab;
+    const selected=button.dataset.sidebarTab===resolved;
     button.classList.toggle('active',selected);
     button.setAttribute('aria-selected',String(selected));
   }
-  if(files)void loadWorkspaceFiles(fileBrowserState.cwd===currentComposerCwd()?fileBrowserState.dir:'');
+  if(resolved==='files')void loadWorkspaceFiles(fileBrowserState.cwd===currentComposerCwd()?fileBrowserState.dir:'');
+  if(resolved==='skills')void loadSkillsCatalog();
 }
 function currentDraftCwd(){return state.projectless?'~':(state.active?.cwd||state.workspaceContext?.cwd||$('#projectPath').textContent||state.config.defaultCwd||'~')}
 function saveActiveDraft(){writeThreadDraft(state.active?.id||null,currentDraftCwd(),{text:$('#prompt')?.value||'',mentions:state.composerMentions,attachments:state.composerAttachments})}
@@ -527,6 +532,288 @@ function openFilesPanel(initialPath=''){
   const tab=$('#utilityTab');tab.textContent=fileBrowserState.preview?.filename||t('File preview');tab.dataset.sidePanelTab='files';tab.hidden=false;
   setSidePanelOpen(true,false);setSidePanelView('files',tab.textContent);
   if(initialPath)void previewWorkspaceFile(initialPath);
+}
+function skillDisplayTitle(skill){return skill?.interface?.displayName||skill?.displayName||skill?.name||'Skill'}
+function skillShortDescription(skill){return skill?.interface?.shortDescription||skill?.shortDescription||skill?.description||''}
+function attachSkillToComposer(skill){
+  if(!skill?.name||!skill?.path||skill.enabled===false)return;
+  const id=`skill:${skill.path}`;
+  if(!state.composerMentions.some(item=>item.id===id)){
+    state.composerMentions.push({
+      id,
+      source:'skill',
+      type:'skill',
+      name:skill.name,
+      path:skill.path,
+      title:`/${skill.name}`,
+      icon:'sparkles',
+    });
+  }
+  renderContextTray();resizePrompt();saveActiveDraft();
+  if(overlayPanelsEnabled()&&!$('#sidePanel').hidden)setSidePanelOpen(false);
+  $('#prompt')?.focus();requestAnimationFrame(()=>$('#prompt')?.focus());
+  toast(`${t('Skills')}: /${skill.name}`);
+}
+function setSkillsFilter(filter='official'){
+  skillsState.filter=filter==='personal'?'personal':'official';
+  for(const btn of document.querySelectorAll('[data-skills-filter]')){
+    const active=btn.dataset.skillsFilter===skillsState.filter;
+    btn.classList.toggle('active',active);
+    btn.setAttribute('aria-selected',String(active));
+  }
+  renderSkillsList();
+}
+function renderSkillsList(){
+  const list=$('#skillsList');if(!list)return;
+  const q=(skillsState.query||'').trim().toLowerCase();
+  const matchSkill=item=>!q||[item.name,skillDisplayTitle(item),skillShortDescription(item),item.description,item.path].some(v=>String(v||'').toLowerCase().includes(q));
+  const officialSystem=skillsState.skills.filter(s=>s.category==='official');
+  const officialCurated=skillsState.curated.filter(c=>!c.installed);
+  const personalAll=skillsState.skills.filter(s=>s.category==='personal');
+  const officialCount=officialSystem.length+officialCurated.length,personalCount=personalAll.length;
+  const offCountEl=$('#skillsOfficialCount'),perCountEl=$('#skillsPersonalCount');
+  if(offCountEl)offCountEl.textContent=String(officialCount);
+  if(perCountEl)perCountEl.textContent=String(personalCount);
+  list.innerHTML='';
+  const buildSkillCard=(skill,{curated=false}={})=>{
+    const card=document.createElement('div');
+    const selectedKey=skillsState.selected?.path||skillsState.selected?.id;
+    const itemKey=skill.path||skill.id||skill.name;
+    card.className='skills-card'+(selectedKey&&selectedKey===itemKey?' active':'')+(skill.enabled===false?' is-disabled':'');
+    card.dataset.skillName=skill.name;
+    if(skill.path)card.dataset.skillPath=skill.path;
+    card.dataset.skillCategory=curated?'curated':(skill.category||'personal');
+    card.tabIndex=0;
+    const badgeLabel=curated?t('Curated'):skill.category==='official'?t('Official'):skill.sourceKind==='project'?t('Project'):skill.editable?t('Personal'):t('External');
+    const badgeClass=curated?'is-curated':skill.category==='official'?'is-official':'is-personal';
+    const desc=skillShortDescription(skill);
+    const parentFolder=skill.path?skill.path.split('/').slice(-3,-1).join('/'):(skill.repoPath||'');
+    card.innerHTML=`<div class="skills-card-head"><strong class="skills-card-title">${escapeHtml(skillDisplayTitle(skill))}</strong><span class="skill-scope-badge ${badgeClass}">${escapeHtml(badgeLabel)}</span></div>${desc?`<div class="skills-card-desc">${escapeHtml(desc)}</div>`:''}<div class="skills-card-foot"><span class="skills-card-id" title="${escapeHtml(skill.path||skill.repoPath||skill.name)}">${escapeHtml(skill.name)}${parentFolder&&skill.sourceKind==='external'?` · ${escapeHtml(parentFolder)}`:''}</span><div class="skills-card-actions"></div></div>`;
+    const actions=card.querySelector('.skills-card-actions');
+    if(curated){
+      const installBtn=document.createElement('button');
+      installBtn.type='button';installBtn.className='skills-mini-btn primary';
+      installBtn.textContent=t('Install');
+      installBtn.disabled=!skill.availableLocal||skillMutations.has(skill.id);
+      installBtn.onclick=event=>{event.stopPropagation();void installCuratedSkill(skill)};
+      actions.append(installBtn);
+    }else{
+      const useBtn=document.createElement('button');
+      useBtn.type='button';useBtn.className='skills-mini-btn primary';
+      useBtn.textContent=t('Use');useBtn.disabled=skill.enabled===false;
+      useBtn.onclick=event=>{event.stopPropagation();attachSkillToComposer(skill)};
+      const toggle=document.createElement('button');
+      toggle.type='button';toggle.className='skills-switch';toggle.role='switch';
+      toggle.disabled=skillMutations.has(skill.path);
+      toggle.setAttribute('aria-checked',String(skill.enabled!==false));
+      toggle.title=skill.enabled!==false?t('Skill enabled'):t('Skill disabled');
+      toggle.setAttribute('aria-label',`${skillDisplayTitle(skill)} ${skill.enabled!==false?'enabled':'disabled'}`);
+      toggle.onclick=event=>{event.stopPropagation();void toggleSkillEnabled(skill,skill.enabled===false)};
+      actions.append(useBtn,toggle);
+    }
+    card.onclick=()=>void inspectSkillItem(skill,{curated});
+    card.onkeydown=event=>{if(event.target===card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();void inspectSkillItem(skill,{curated})}};
+    return card;
+  };
+  if(skillsState.filter==='official'){
+    const sysFiltered=officialSystem.filter(matchSkill),curFiltered=officialCurated.filter(matchSkill);
+    if(sysFiltered.length){
+      const head=document.createElement('div');head.className='skills-group-heading';head.innerHTML=`<span>${escapeHtml(t('Installed official skills'))}</span><span>${sysFiltered.length}</span>`;
+      list.append(head);for(const item of sysFiltered)list.append(buildSkillCard(item));
+    }
+    if(curFiltered.length){
+      const head=document.createElement('div');head.className='skills-group-heading';head.innerHTML=`<span>${escapeHtml(t('Official curated catalog'))}</span><span>${curFiltered.length}</span>`;
+      list.append(head);
+      const notice=document.createElement('small');notice.className='skills-notice';notice.textContent=t('Local OpenAI cache, not signature-verified. Review instructions and scripts before use.');list.append(notice);
+      for(const item of curFiltered)list.append(buildSkillCard(item,{curated:true}));
+    }
+  }else{
+    const ownFiltered=personalAll.filter(s=>s.editable&&matchSkill(s));
+    const extFiltered=personalAll.filter(s=>!s.editable&&matchSkill(s));
+    if(ownFiltered.length){
+      const head=document.createElement('div');head.className='skills-group-heading';head.innerHTML=`<span>${escapeHtml(t('Personal skills'))}</span><span>${ownFiltered.length}</span>`;
+      list.append(head);for(const item of ownFiltered)list.append(buildSkillCard(item));
+    }
+    if(extFiltered.length){
+      const head=document.createElement('div');head.className='skills-group-heading';head.innerHTML=`<span>${escapeHtml(t('Project & external skills'))}</span><span>${extFiltered.length}</span>`;
+      list.append(head);for(const item of extFiltered)list.append(buildSkillCard(item));
+    }
+  }
+  if(!list.children.length){
+    list.innerHTML=`<div class="panel-empty">${escapeHtml(t('No matching skills'))}</div>`;
+  }
+}
+async function loadSkillsCatalog(forceReload=false){
+  const cwd=currentComposerCwd()||state.config.defaultCwd||'.',requestId=++skillsState.requestId;
+  if(skillsState.cwd!==cwd){skillsState.skills=[];skillsState.curated=[]}
+  try{
+    const response=await fetch(`/api/skills/catalog?cwd=${encodeURIComponent(cwd)}${forceReload?'&refresh=1':''}`,{cache:'no-store'}),data=await response.json();
+    if(!response.ok)throw new Error(data.error||'Could not load skills');
+    if(requestId!==skillsState.requestId||cwd!==(currentComposerCwd()||state.config.defaultCwd||'.'))return;
+    skillsState.cwd=cwd;skillsState.personalRoot=data.personalRoot||'';skillsState.extraRoots=data.extraRoots||[];
+    skillsState.errors=Array.isArray(data.errors)?data.errors:[];
+    skillsState.skills=Array.isArray(data.skills)?data.skills:[];
+    skillsState.curated=Array.isArray(data.curated)?data.curated:[];
+    if(skillsState.selected?.path&&!skillsState.selected.curated){
+      const current=skillsState.skills.find(s=>s.path===skillsState.selected.path);
+      skillsState.selected=current?{...skillsState.selected,...current}:{...skillsState.selected,enabled:false};
+      $('#skillInspectorUseButton').disabled=!current||current.enabled===false;
+    }
+    renderSkillsList();
+    if(skillsState.errors.length){const note=document.createElement('div');note.className='skills-notice';note.textContent=skillsState.errors.map(e=>e.message||e.error||String(e)).join('\n');$('#skillsList').prepend(note)}
+  }catch(error){
+    if(requestId===skillsState.requestId){skillsState.cwd='';skillsState.skills=[];skillsState.curated=[];$('#skillsList').innerHTML=`<div class="panel-empty">${escapeHtml(error.message||'Could not load skills')}</div>`}
+  }
+}
+async function toggleSkillEnabled(skill,enabled){
+  if(!skill?.path||skillMutations.has(skill.path))return;
+  skillMutations.add(skill.path);renderSkillsList();
+  try{
+    const res=await rpc('skills/config/write',{path:skill.path,cwd:currentComposerCwd()||state.config.defaultCwd,enabled:Boolean(enabled)});
+    skill.enabled=res.effectiveEnabled;
+    if(skillsState.selected?.path===skill.path){skillsState.selected.enabled=skill.enabled;$('#skillInspectorUseButton').disabled=!skill.enabled}
+    toast(t(skill.enabled?'Skill enabled':'Skill disabled'));
+    await loadSkillsCatalog(true);
+  }catch(error){toast(t(error.message||'Could not update skill'))}
+  finally{skillMutations.delete(skill.path);renderSkillsList()}
+}
+async function installCuratedSkill(curatedSkill){
+  if(!curatedSkill?.id||skillMutations.has(curatedSkill.id))return;
+  if(!confirm(t('Install this skill? Review its instructions and scripts before use.')))return;
+  skillMutations.add(curatedSkill.id);renderSkillsList();
+  try{
+    const response=await fetch('/api/skills/install',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id:curatedSkill.id})}),data=await response.json();
+    if(!response.ok)throw new Error(data.error||'Install failed');
+    toast(t('Skill installed'));
+    await loadSkillsCatalog(true);
+    setSkillsFilter('official');
+    const installed=skillsState.skills.find(s=>s.path===data.path);
+    if(installed)void inspectSkillItem(installed);
+  }catch(error){toast(t(error.message||'Install failed'))}
+  finally{skillMutations.delete(curatedSkill.id);renderSkillsList()}
+}
+function confirmDiscardSkillEdits(){
+  if(!skillsState.editing)return true;
+  return confirm(t('Discard unsaved skill changes?'));
+}
+async function inspectSkillItem(skill,{curated=false}={}){
+  if(!confirmDiscardSkillEdits())return;
+  const inspectId=++skillsState.inspectRequestId;
+  const targetPath=skill?.path||skill?.sourcePath;
+  skillsState.selected={...skill,curated};skillsState.editing=false;skillsState.creating=false;
+  renderSkillsList();
+  const tab=$('#utilityTab');
+  tab.textContent=skillDisplayTitle(skill);tab.dataset.sidePanelTab='skills';tab.hidden=false;
+  setSidePanelOpen(true,false);setSidePanelView('skills',skillDisplayTitle(skill));
+  $('#skillInspectorTitle').textContent=skillDisplayTitle(skill);
+  const badge=$('#skillInspectorBadge');
+  badge.textContent=curated?t('Curated'):skill.category==='official'?t('Official'):skill.editable?t('Personal'):t('External');
+  badge.className=`skill-scope-badge ${curated?'is-curated':skill.category==='official'?'is-official':'is-personal'}`;
+  $('#skillInspectorPath').textContent=targetPath?shortPath(targetPath):(skill.repoPath||'');
+  $('#skillEditorWrap').hidden=true;$('#skillCreateFields').hidden=true;$('#skillInspectorBody').hidden=false;
+  $('#skillInspectorUseButton').hidden=curated||!targetPath;
+  $('#skillInspectorUseButton').disabled=skill.enabled===false;
+  $('#skillInspectorInstallButton').hidden=!curated||!skill.availableLocal;
+  $('#skillInspectorEditButton').hidden=curated||!skill.editable;
+  $('#skillInspectorSaveButton').hidden=true;
+  $('#skillInspectorDeleteButton').hidden=curated||!skill.editable;
+  $('#skillInspectorUseButton').onclick=()=>{const current=skillsState.skills.find(s=>s.path===targetPath);if(current)attachSkillToComposer(current)};
+  $('#skillInspectorInstallButton').onclick=()=>void installCuratedSkill(skill);
+  $('#skillInspectorDeleteButton').onclick=()=>void deleteSelectedPersonalSkill();
+  if(!targetPath){
+    $('#skillInspectorBody').innerHTML=`<div class="message-text"><p>${escapeHtml(skill.description||skill.shortDescription||'')}</p></div>`;
+    return;
+  }
+  $('#skillInspectorBody').textContent=t('Loading skills…');
+  $('#skillInspectorEditButton').hidden=true;$('#skillInspectorDeleteButton').hidden=true;
+  try{
+    const response=await fetch(`/api/skills/file?path=${encodeURIComponent(targetPath)}&cwd=${encodeURIComponent(currentComposerCwd()||state.config.defaultCwd)}`,{cache:'no-store'}),file=await response.json();
+    if(!response.ok)throw new Error(file.error||'Could not read SKILL.md');
+    if(inspectId!==skillsState.inspectRequestId)return;
+    skillsState.selected={...skill,curated,path:file.path,fileName:file.name,editable:Boolean(file.editable),content:file.content};
+    $('#skillInspectorEditButton').hidden=curated||!file.editable;
+    $('#skillInspectorDeleteButton').hidden=curated||!file.editable;
+    $('#skillInspectorBody').innerHTML=`<div class="message-text">${renderAssistantMarkdown((file.content||'').replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/,''),{cwd:currentComposerCwd()||state.config.defaultCwd})}</div>`;
+    $('#skillInspectorEditButton').onclick=()=>startEditingSelectedSkill();
+  }catch(error){
+    if(inspectId===skillsState.inspectRequestId)$('#skillInspectorBody').innerHTML=`<div class="panel-empty">${escapeHtml(error.message)}</div>`;
+  }
+}
+function startEditingSelectedSkill(){
+  const selected=skillsState.selected;if(!selected?.editable)return;
+  skillsState.editing=true;skillsState.creating=false;
+  $('#skillInspectorBody').hidden=true;
+  $('#skillEditorWrap').hidden=false;$('#skillCreateFields').hidden=true;
+  $('#skillEditorTextarea').value=selected.content||'';
+  $('#skillInspectorEditButton').hidden=true;
+  $('#skillInspectorSaveButton').hidden=false;
+  $('#skillInspectorSaveButton').onclick=()=>void saveSkillFromEditor();
+  $('#skillEditorTextarea').focus();
+}
+function openNewPersonalSkillEditor(){
+  if(!confirmDiscardSkillEdits())return;
+  skillsState.inspectRequestId++;
+  skillsState.creating=true;skillsState.editing=true;skillsState.selected=null;
+  renderSkillsList();
+  const tab=$('#utilityTab');
+  tab.textContent=t('New personal skill');tab.dataset.sidePanelTab='skills';tab.hidden=false;
+  setSidePanelOpen(true,false);setSidePanelView('skills',t('New personal skill'));
+  $('#skillInspectorTitle').textContent=t('New personal skill');
+  const badge=$('#skillInspectorBadge');badge.textContent=t('Personal');badge.className='skill-scope-badge is-personal';
+  $('#skillInspectorPath').textContent=`${skillsState.personalRoot||'~/.codex/skills'}/<skill-id>/SKILL.md`;
+  $('#skillInspectorBody').hidden=true;
+  $('#skillEditorWrap').hidden=false;$('#skillCreateFields').hidden=false;
+  $('#skillCreateNameInput').value='';$('#skillCreateDescInput').value='';
+  $('#skillEditorTextarea').value='---\nname: my-custom-skill\ndescription: "Describe when Codex should use this skill."\n---\n\n# My Custom Skill\n\n## Instructions\n- Step 1: Inspect the inputs.\n- Step 2: Run the workflow and verify outputs.\n';
+  const syncTemplate=()=>{
+    const id=$('#skillCreateNameInput').value.trim()||'my-custom-skill';
+    const desc=$('#skillCreateDescInput').value.trim()||'Describe when Codex should use this skill.';
+    $('#skillEditorTextarea').value=$('#skillEditorTextarea').value.replace(/^(---\n[\s\S]*?\n?)name:[^\n]*/,(m,prefix)=>`${prefix}name: ${JSON.stringify(id)}`).replace(/^(---\n[\s\S]*?\n)description:[^\n]*/,(m,prefix)=>`${prefix}description: ${JSON.stringify(desc)}`);
+  };
+  $('#skillCreateNameInput').oninput=syncTemplate;
+  $('#skillCreateDescInput').oninput=syncTemplate;
+  $('#skillInspectorUseButton').hidden=true;$('#skillInspectorInstallButton').hidden=true;
+  $('#skillInspectorEditButton').hidden=true;$('#skillInspectorDeleteButton').hidden=true;
+  $('#skillInspectorSaveButton').hidden=false;
+  $('#skillInspectorSaveButton').onclick=()=>void saveSkillFromEditor();
+  $('#skillCreateNameInput').focus();
+}
+async function saveSkillFromEditor(){
+  const creating=skillsState.creating;
+  if(skillMutations.has('editor'))return;
+  const name=creating?$('#skillCreateNameInput').value.trim():(skillsState.selected?.fileName||skillsState.selected?.name);
+  const description=creating?$('#skillCreateDescInput').value.trim():'';
+  const content=$('#skillEditorTextarea').value;
+  skillMutations.add('editor');$('#skillInspectorSaveButton').disabled=true;
+  try{
+    const response=await fetch('/api/skills/personal',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,description,content,overwrite:!creating})}),saved=await response.json();
+    if(!response.ok)throw new Error(saved.error||'Could not save skill');
+    toast(t('Skill saved'));skillsState.editing=false;skillsState.creating=false;
+    await loadSkillsCatalog(true);
+    const target=skillsState.skills.find(s=>s.path===saved.path);
+    setSkillsFilter(target?.category||'personal');
+    if(!target){toast(t('Saved on disk, but Codex did not load this skill. Refresh to see parser errors.'),5000);return}
+    await inspectSkillItem(target);
+  }catch(error){toast(t(error.message||'Could not save skill'))}
+  finally{skillMutations.delete('editor');$('#skillInspectorSaveButton').disabled=false}
+}
+async function deleteSelectedPersonalSkill(){
+  const selected=skillsState.selected;if(!selected?.editable)return;
+  if(skillMutations.has(selected.path)||!confirm(t('Delete personal skill “{name}” and its files?',{name:selected.name})))return;
+  skillMutations.add(selected.path);
+  try{
+    const response=await fetch('/api/skills/personal',{method:'DELETE',headers:{'content-type':'application/json'},body:JSON.stringify({name:selected.name,path:selected.path})}),data=await response.json();
+    if(!response.ok)throw new Error(data.error||'Could not delete skill');
+    toast(t('Skill deleted'));
+    skillsState.selected=null;skillsState.editing=false;skillsState.creating=false;skillsState.inspectRequestId++;
+    state.composerMentions=state.composerMentions.filter(item=>item.path!==selected.path);renderContextTray();saveActiveDraft();
+    $('#skillInspectorTitle').textContent=t('Skills');$('#skillInspectorPath').textContent='';
+    $('#skillInspectorBody').hidden=false;$('#skillEditorWrap').hidden=true;
+    $('#skillInspectorBody').innerHTML=`<div class="panel-empty">${escapeHtml(t('Select a skill from the left sidebar to view or edit its instructions.'))}</div>`;
+    $('#skillInspectorUseButton').hidden=true;$('#skillInspectorEditButton').hidden=true;$('#skillInspectorSaveButton').hidden=true;$('#skillInspectorDeleteButton').hidden=true;
+    await loadSkillsCatalog(true);
+  }catch(error){toast(t(error.message||'Could not delete skill'))}
+  finally{skillMutations.delete(selected.path)}
 }
 async function uploadFilesToWorkspace(fileList){
   const files=[...(fileList||[])];if(!files.length)return[];
@@ -721,6 +1008,7 @@ async function applyActiveReviewPatch(){const review=state.activeReview;if(!revi
 function applyTerminalInteraction(p){const itemId=String(p.itemId),current=state.activityItems.get(p.turnId)?.get(itemId);if(current?.type!=='commandExecution')return;let buffer=current.terminalInputBuffer||'',commands=[];for(const char of String(p.stdin||'')){if(char==='\r'||char==='\n'){const command=buffer.trim();if(command)commands.push(command);buffer='';continue}if(char==='\u0003'){buffer='';continue}if(char==='\b'||char==='\u007f'){buffer=buffer.slice(0,-1);continue}buffer+=char}const actions=[...(current.commandActions||[]),...commands.map(command=>({type:'unknown',command}))];upsertItem({...current,status:'inProgress',terminalInputBuffer:buffer,commandActions:actions},p.turnId)}
 
 function onNotification(method,p){
+  if(method==='skills/changed'){void loadSkillsCatalog(true);return}
   if(method==='turn/completed')dismissPendingApprovals(p.threadId||state.active?.id,p.turn?.id);
   if(method==='item/completed')dismissPendingApprovals(p.threadId||state.active?.id,p.turnId,p.item?.id);
   if(method==='thread/tokenUsage/updated'){
@@ -871,24 +1159,49 @@ async function searchMentionSuggestions(match){
     renderComposerAutocomplete();
   }
 }
-function updateComposerAutocomplete(){const input=$('#prompt'),match=getComposerAutocomplete(input.value,input.selectionStart??input.value.length);if(!match){closeComposerAutocomplete();return}autocompleteState.match=match;autocompleteState.selected=0;if(match.type==='slash'){autocompleteState.requestId++;const query=match.query.trim().toLowerCase();autocompleteState.items=slashCommandCatalog.filter(item=>(!item.requiresThread||state.active)&&(item.id.includes(query)||item.title.toLowerCase().includes(query)));autocompleteState.message='';renderComposerAutocomplete();return}searchMentionSuggestions(match)}
+function updateComposerAutocomplete(){
+  const input=$('#prompt'),cursor=input.selectionStart??input.value.length,match=getComposerAutocomplete(input.value,cursor);
+  if(!match){closeComposerAutocomplete();return}
+  autocompleteState.match=match;autocompleteState.selected=0;
+  if(match.type==='slash'||match.type==='skill'){
+    if(skillsState.cwd!==(currentComposerCwd()||state.config.defaultCwd||'.'))void loadSkillsCatalog().then(()=>{if(autocompleteState.match===match&&skillsState.cwd)updateComposerAutocomplete()});
+    autocompleteState.requestId++;
+    const query=match.query.trim().toLowerCase();
+    const commands=match.type==='skill'?[]:slashCommandCatalog.filter(item=>(!item.requiresThread||state.active)&&(item.id.includes(query)||item.title.toLowerCase().includes(query)));
+    const skillItems=query||match.type==='skill'?skillsState.skills.filter(s=>s.enabled!==false&&(s.name.toLowerCase().includes(query)||skillDisplayTitle(s).toLowerCase().includes(query))).slice(0,8).map(s=>({
+      id:`skill:${s.path}`,
+      source:'skill',
+      type:'skill',
+      name:s.name,
+      path:s.path,
+      title:`/${s.name}`,
+      description:`${t(s.category==='official'?'Official':'Personal')} Skill · ${skillShortDescription(s)||s.name}`,
+      icon:'sparkles',
+    })):[];
+    autocompleteState.items=[...commands,...skillItems];
+    autocompleteState.message='';
+    renderComposerAutocomplete();
+    return;
+  }
+  searchMentionSuggestions(match);
+}
 function moveComposerAutocomplete(delta){if(!autocompleteState.items.length)return;autocompleteState.selected=(autocompleteState.selected+delta+autocompleteState.items.length)%autocompleteState.items.length;renderComposerAutocomplete()}
 function setPlanMode(active){state.planMode=Boolean(active);refreshComposerPlaceholder();syncPermissionControl()}
 function applyAutocompleteToken(match,replacement){const input=$('#prompt'),result=applyComposerSuggestion(input.value,match,replacement);input.value=result.text;input.setSelectionRange(result.cursor,result.cursor);resizePrompt()}
-function renderContextTray(){const tray=$('#composerContextTray');tray.innerHTML='';for(const mention of state.composerMentions){const chip=document.createElement('div');chip.className='composer-context-chip';chip.dataset.contextId=mention.id;chip.innerHTML=`${codexIcon(mention.icon||'file')}<span>${escapeHtml(mention.title)}</span><button type="button" aria-label="Remove ${escapeHtml(mention.title)}">${codexIcon('x')}</button>`;chip.querySelector('button').onclick=()=>{state.composerMentions=state.composerMentions.filter(item=>item.id!==mention.id);renderContextTray();saveActiveDraft()};tray.append(chip)}for(const attachment of state.composerAttachments){const chip=document.createElement('div');chip.className='composer-context-chip';chip.dataset.contextId=attachment.id;chip.dataset.attachmentPath=attachment.relativePath||attachment.filename;chip.innerHTML=`${codexIcon(attachment.isImage?'image':'paperclip')}<span>${escapeHtml(attachment.relativePath||attachment.filename)}</span><button type="button" aria-label="Remove ${escapeHtml(attachment.filename)}">${codexIcon('x')}</button>`;chip.querySelector('button').onclick=()=>{state.composerAttachments=state.composerAttachments.filter(item=>item.id!==attachment.id);renderContextTray();syncComposerSubmitState();saveActiveDraft()};tray.append(chip)}tray.hidden=!state.composerMentions.length&&!state.composerAttachments.length}
-function selectComposerAutocomplete(index=autocompleteState.selected){const item=autocompleteState.items[index],match=autocompleteState.match;if(!item||!match)return;const id=item.id;if(item.source==='action'&&id==='choose-project'){closeComposerAutocomplete();openFolderPicker()}else if(item.source==='file'||item.source==='folder'){const isDirectory=item.source==='folder';applyAutocompleteToken(match,formatFileMention(item.path,{isDirectory,quoted:match.quoted}));if(!state.composerMentions.some(mention=>mention.id===item.id))state.composerMentions.push({...item,type:item.source});renderContextTray();saveActiveDraft();if(isDirectory)updateComposerAutocomplete();else closeComposerAutocomplete()}else if(item.source==='task'){applyAutocompleteToken(match,`@${item.title}`);if(!state.composerMentions.some(mention=>mention.id===item.id))state.composerMentions.push({...item});renderContextTray();saveActiveDraft();closeComposerAutocomplete()}else{if(id==='init')applyAutocompleteToken(match,'/init');closeComposerAutocomplete();if(id==='plan'){setPlanMode(!state.planMode);$('#prompt').value='';resizePrompt()}else if(id==='model'){ $('#prompt').value='';resizePrompt();openModelMenu()}else if(id==='reasoning'){ $('#prompt').value='';resizePrompt();openModelMenu()}else if(id==='project'){ $('#prompt').value='';resizePrompt();openFolderPicker()}else if(id==='mcp'){ $('#prompt').value='';resizePrompt();toast('MCP status requires the native desktop status surface.')}else if(id==='compact'){ $('#prompt').value='';resizePrompt();saveActiveDraft();void compactActiveThread()}else if(id==='status'){ $('#prompt').value='';resizePrompt();const quota=[quotaWindowSummaryLabel(state.rateLimits?.primary),quotaWindowSummaryLabel(state.rateLimits?.secondary)].filter(Boolean).join(' · ');toast([state.active?.id?`Task ${state.active.id}`:'No active task',quota].filter(Boolean).join(' · '))}}requestAnimationFrame(()=>$('#prompt').focus())}
+function renderContextTray(){const tray=$('#composerContextTray');tray.innerHTML='';for(const mention of state.composerMentions){const chip=document.createElement('div');chip.className='composer-context-chip';chip.dataset.contextId=mention.id;chip.innerHTML=`${codexIcon(mention.icon||'file')}<span>${escapeHtml(mention.title)}</span><button type="button" aria-label="Remove ${escapeHtml(mention.title)}">${codexIcon('x')}</button>`;chip.querySelector('button').onclick=()=>{state.composerMentions=state.composerMentions.filter(item=>item.id!==mention.id);renderContextTray();syncComposerSubmitState();saveActiveDraft()};tray.append(chip)}for(const attachment of state.composerAttachments){const chip=document.createElement('div');chip.className='composer-context-chip';chip.dataset.contextId=attachment.id;chip.dataset.attachmentPath=attachment.relativePath||attachment.filename;chip.innerHTML=`${codexIcon(attachment.isImage?'image':'paperclip')}<span>${escapeHtml(attachment.relativePath||attachment.filename)}</span><button type="button" aria-label="Remove ${escapeHtml(attachment.filename)}">${codexIcon('x')}</button>`;chip.querySelector('button').onclick=()=>{state.composerAttachments=state.composerAttachments.filter(item=>item.id!==attachment.id);renderContextTray();syncComposerSubmitState();saveActiveDraft()};tray.append(chip)}tray.hidden=!state.composerMentions.length&&!state.composerAttachments.length}
+function selectComposerAutocomplete(index=autocompleteState.selected){const item=autocompleteState.items[index],match=autocompleteState.match;if(!item||!match)return;const id=item.id;if(item.source==='action'&&id==='choose-project'){closeComposerAutocomplete();openFolderPicker()}else if(item.source==='skill'){applyAutocompleteToken(match,'');closeComposerAutocomplete();attachSkillToComposer({name:item.name,path:item.path})}else if(item.source==='file'||item.source==='folder'){const isDirectory=item.source==='folder';applyAutocompleteToken(match,formatFileMention(item.path,{isDirectory,quoted:match.quoted}));if(!state.composerMentions.some(mention=>mention.id===item.id))state.composerMentions.push({...item,type:item.source});renderContextTray();saveActiveDraft();if(isDirectory)updateComposerAutocomplete();else closeComposerAutocomplete()}else if(item.source==='task'){applyAutocompleteToken(match,`@${item.title}`);if(!state.composerMentions.some(mention=>mention.id===item.id))state.composerMentions.push({...item});renderContextTray();saveActiveDraft();closeComposerAutocomplete()}else{if(id==='init')applyAutocompleteToken(match,'/init');closeComposerAutocomplete();if(id==='plan'){setPlanMode(!state.planMode);$('#prompt').value='';resizePrompt()}else if(id==='model'){ $('#prompt').value='';resizePrompt();openModelMenu()}else if(id==='reasoning'){ $('#prompt').value='';resizePrompt();openModelMenu()}else if(id==='project'){ $('#prompt').value='';resizePrompt();openFolderPicker()}else if(id==='mcp'){ $('#prompt').value='';resizePrompt();toast('MCP status requires the native desktop status surface.')}else if(id==='compact'){ $('#prompt').value='';resizePrompt();saveActiveDraft();void compactActiveThread()}else if(id==='status'){ $('#prompt').value='';resizePrompt();const quota=[quotaWindowSummaryLabel(state.rateLimits?.primary),quotaWindowSummaryLabel(state.rateLimits?.secondary)].filter(Boolean).join(' · ');toast([state.active?.id?`Task ${state.active.id}`:'No active task',quota].filter(Boolean).join(' · '))}}requestAnimationFrame(()=>$('#prompt').focus())}
 function handlePromptInput(){resizePrompt();saveActiveDraft();updateComposerAutocomplete()}
 function handlePromptKeydown(event){if(event.isComposing||promptComposing||event.keyCode===229)return;const open=!$('#composerAutocomplete').hidden;if(open){if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();moveComposerAutocomplete(event.key==='ArrowDown'?1:-1);return}if((event.key==='Enter'&&!event.shiftKey)||event.key==='Tab'){event.preventDefault();selectComposerAutocomplete();return}if(event.key==='Escape'){event.preventDefault();closeComposerAutocomplete();return}}if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();$('#composer').requestSubmit()}}
 async function resumeActiveThread(thread=state.active){if(!thread)return null;const resumed=await rpc('thread/resume',{threadId:thread.id});if(state.active?.id===thread.id){state.active={...state.active,...resumed.thread};renderHeader()}return resumed}
 async function submitPrompt(event){
   event.preventDefault();
-  const input=$('#prompt'),text=input.value.trim(),turnId=activeTurnId(),hasAttachments=state.composerAttachments.length>0;
+  const input=$('#prompt'),text=input.value.trim(),turnId=activeTurnId(),hasAttachments=state.composerAttachments.length>0||state.composerMentions.some(m=>m.type==='skill');
   if(turnId&&!text&&!hasAttachments){await interruptActiveTurn();return}
   if(pendingSubmission)return;
   closeComposerAutocomplete();closePermissionMenu();
   if(!text&&!hasAttachments&&!turnId)return;
   const epoch=conversationEpoch,mentions=state.composerMentions,attachments=state.composerAttachments,model=state.selectedModel,effort=$('#effortSelect').value;
-  const inputItems=buildConversationInput({text,mentions,attachments}),displayText=textFromInput(inputItems)||text||(attachments.map(item=>`@${item.relativePath||item.filename}`).join(' '));
+  const inputItems=buildConversationInput({text,mentions,attachments}),displayText=textFromInput(inputItems)||text||[...mentions.filter(m=>m.type==='skill').map(m=>`/${m.name}`),...attachments.map(item=>`@${item.relativePath||item.filename}`)].join(' ');
   let target=state.active,optimisticId=null,acceptedTurn=turnId||null,responseTurn=null;
   const cwd=target?.cwd||$('#projectPath').textContent.replace(/^~/,state.config.home),projectless=state.projectless,draftKeyId=target?.id||null,draftCwd=currentDraftCwd();
   const threadPolicy=permissionThreadPolicy(),turnPolicy=permissionTurnPolicy(cwd);
@@ -940,7 +1253,7 @@ async function submitPrompt(event){
     if(current())scheduleActiveThreadSync(0);
   }catch(error){
     if(current()&&optimisticId){state.items.get(optimisticId)?.remove();state.items.delete(optimisticId)}
-    if(text||attachments.length)restoreInput();
+    if(text||attachments.length||mentions.length)restoreInput();
     const message=t(threadInputErrorMessage(error));
     if(target){
       if(turnId)setRunPhase(target.id,'waiting',{turnId,error:message});
@@ -1000,7 +1313,7 @@ async function interruptActiveTurn(){
   catch(error){setRunPhase(threadId,'waiting',{turnId,error:t(threadInputErrorMessage(error))});if(!error?.silentTransportSwitch)toast(t(threadInputErrorMessage(error)),5200)}
   finally{interruptingTurns.delete(key);syncComposerSubmitState();if(state.active?.id===threadId)scheduleActiveThreadSync(0)}
 }
-function syncComposerSubmitState(){const button=$('#sendButton');if(!button)return;const hasInput=Boolean($('#prompt').value.trim()||state.composerAttachments.length),stopping=activeTurnId()&&!hasInput,interrupting=interruptingTurns.has(`${state.active?.id}:${activeTurnId()}`);button.disabled=stopping?interrupting:!!pendingSubmission;$('#composer').setAttribute('aria-busy',String(!!pendingSubmission||interrupting));const mode=activeTurnId()?(hasInput?'steer':'stop'):'send',label=mode==='stop'?'Stop':mode==='steer'?'Steer':'Send message';button.dataset.submitMode=mode;button.classList.toggle('stop',mode==='stop');button.classList.toggle('steer',mode==='steer');button.innerHTML=codexIcon(mode==='stop'?'square':'arrowUp');button.title=t(label);button.setAttribute('aria-label',t(label))}
+function syncComposerSubmitState(){const button=$('#sendButton');if(!button)return;const hasInput=Boolean($('#prompt').value.trim()||state.composerAttachments.length||state.composerMentions.some(m=>m.type==='skill')),stopping=activeTurnId()&&!hasInput,interrupting=interruptingTurns.has(`${state.active?.id}:${activeTurnId()}`);button.disabled=stopping?interrupting:!!pendingSubmission;$('#composer').setAttribute('aria-busy',String(!!pendingSubmission||interrupting));const mode=activeTurnId()?(hasInput?'steer':'stop'):'send',label=mode==='stop'?'Stop':mode==='steer'?'Steer':'Send message';button.dataset.submitMode=mode;button.classList.toggle('stop',mode==='stop');button.classList.toggle('steer',mode==='steer');button.innerHTML=codexIcon(mode==='stop'?'square':'arrowUp');button.title=t(label);button.setAttribute('aria-label',t(label))}
 function setActiveTurnId(turnId=''){const button=$('#sendButton');if(!button)return;button.dataset.turnId=turnId||'';syncComposerSubmitState();renderRuntimeBar()}
 function syncTurnRuntime(turn){
   const threadId=state.active?.id;if(!threadId||!turn)return;
@@ -1061,7 +1374,7 @@ function defaultSidePanelTarget(){
   if(state.turnDiffs.size||state.activeReview)return['review','Review'];
   return['files',t('File preview')];
 }
-function setSidePanelView(view,title){const launcher=view==='launcher',review=view==='review',files=view==='files',utility=view==='utility',browser=view==='browser',terminal=view==='terminal',sideTask=view==='side-task';$('#sidePanelLauncher').hidden=!launcher;$('#reviewPanelContent').hidden=!review;$('#filesPanel').hidden=!files;$('#browserPanel').hidden=!browser;$('#sideTerminalPanel').hidden=!terminal;$('#sideTaskPanel').hidden=!sideTask;$('#utilityPanelContent').hidden=!utility;if(files){const tab=$('#utilityTab');tab.textContent=fileBrowserState.preview?.filename||title||t('File preview');tab.dataset.sidePanelTab='files';tab.hidden=false}for(const tab of document.querySelectorAll('.side-panel-tab')){const selected=tab.dataset.sidePanelTab===view;tab.classList.toggle('active',selected);tab.setAttribute('aria-selected',String(selected))}$('#newTab').hidden=!launcher;if(review)$('#reviewTab').hidden=false;if(files||utility||browser||terminal||sideTask)$('#utilityTab').hidden=false;$('#sidePanelTitle').textContent=title||(launcher?'New tab':review?'Review':$('#utilityTab').textContent);renderChanges();if(terminal)requestAnimationFrame(()=>{initializeTerminal(terminalStates.side);fitTerminal(terminalStates.side);terminalStates.side.term?.focus()});if(sideTask)renderSideTasks();if(overlayPanelsEnabled()&&document.body.classList.contains('side-panel-open'))requestAnimationFrame(()=>$('#closeSidePanel').focus())}
+function setSidePanelView(view,title){document.body.classList.toggle('skills-panel-open',view==='skills');const launcher=view==='launcher',review=view==='review',files=view==='files',skills=view==='skills',utility=view==='utility',browser=view==='browser',terminal=view==='terminal',sideTask=view==='side-task';$('#sidePanelLauncher').hidden=!launcher;$('#reviewPanelContent').hidden=!review;$('#filesPanel').hidden=!files;if($('#skillsPanel'))$('#skillsPanel').hidden=!skills;$('#browserPanel').hidden=!browser;$('#sideTerminalPanel').hidden=!terminal;$('#sideTaskPanel').hidden=!sideTask;$('#utilityPanelContent').hidden=!utility;if(files){const tab=$('#utilityTab');tab.textContent=fileBrowserState.preview?.filename||title||t('File preview');tab.dataset.sidePanelTab='files';tab.hidden=false}if(skills){const tab=$('#utilityTab');tab.textContent=title||skillDisplayTitle(skillsState.selected)||t('Skills');tab.dataset.sidePanelTab='skills';tab.hidden=false}for(const tab of document.querySelectorAll('.side-panel-tab')){const selected=tab.dataset.sidePanelTab===view;tab.classList.toggle('active',selected);tab.setAttribute('aria-selected',String(selected))}$('#newTab').hidden=!launcher;if(review)$('#reviewTab').hidden=false;if(files||skills||utility||browser||terminal||sideTask)$('#utilityTab').hidden=false;$('#sidePanelTitle').textContent=title||(launcher?'New tab':review?'Review':$('#utilityTab').textContent);renderChanges();if(terminal)requestAnimationFrame(()=>{initializeTerminal(terminalStates.side);fitTerminal(terminalStates.side);terminalStates.side.term?.focus()});if(sideTask)renderSideTasks();if(overlayPanelsEnabled()&&document.body.classList.contains('side-panel-open'))requestAnimationFrame(()=>$('#closeSidePanel').focus())}
 function openReviewPanel(review=null){state.activeReview=review||[...state.turnDiffs.values()].at(-1)||state.activeReview;setSidePanelOpen(true,false);setSidePanelView('review','Review')}
 function openUtilityPanel(kind){if(kind==='browser'){openBrowserPanel();return}if(kind==='files'){openFilesPanel();return}const tab=$('#utilityTab');if(kind==='terminal'){tab.textContent='Terminal';tab.dataset.sidePanelTab='terminal';setSidePanelOpen(true,false);setSidePanelView('terminal','Terminal');return}if(kind==='side-task'){tab.textContent='Side tasks';tab.dataset.sidePanelTab='side-task';setSidePanelOpen(true,false);setSidePanelView('side-task','Side tasks');return}const labels={files:['Files','folderOpen','Choose or switch the local project folder available to this WebUI.']},entry=labels[kind];if(!entry)return;const[title,icon,description]=entry;tab.textContent=title;tab.dataset.sidePanelTab='utility';$('#utilityPanelTitle').textContent=title;$('#utilityPanelDescription').textContent=description;$('#utilityPanelIcon').innerHTML=codexIcon(icon);const action=$('#utilityPanelAction');action.hidden=false;action.textContent='Choose project folder';action.onclick=openFolderPicker;setSidePanelOpen(true,false);setSidePanelView('utility',title)}
 function setSidePanelOpen(open,reset=true){const panel=$('#sidePanel'),trigger=$('#toggleSidePanel'),wasOpen=!panel.hidden;if(open){setSummaryPanelOpen(false);if(!wasOpen){sidePanelReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:trigger;panel.hidden=false;document.body.classList.add('side-panel-open');trigger.setAttribute('aria-pressed','true');trigger.setAttribute('aria-expanded','true')}if(reset){const[targetView,targetTitle]=defaultSidePanelTarget();setSidePanelView(targetView,targetTitle)}if(!wasOpen)focusPanel(panel,$('#closeSidePanel'))}else{panel.hidden=true;document.body.classList.remove('side-panel-open','review-split-open');trigger.setAttribute('aria-pressed','false');trigger.setAttribute('aria-expanded','false');restorePanelFocus(panel,sidePanelReturnFocus);sidePanelReturnFocus=null}}
@@ -1079,8 +1392,9 @@ function setBottomPanelOpen(open){const panel=$('#bottomPanel');panel.hidden=!op
 function setSidebarSearchOpen(open){const panel=$('#sidebarSearchPanel'),input=$('#threadSearch');panel.hidden=!open;$('#sidebarSearchButton').setAttribute('aria-expanded',String(open));if(open){requestAnimationFrame(()=>input.focus());return}if(input.value){input.value='';renderThreads()}}
 function setSidebarHelpOpen(open){$('#sidebarHelpMenu').hidden=!open;$('#sidebarHelpButton').setAttribute('aria-expanded',String(open))}
 
-$('#newTab').onclick=()=>setSidePanelView('launcher','New tab');$('#reviewTab').onclick=()=>openReviewPanel(state.activeReview);$('#utilityTab').onclick=()=>setSidePanelView($('#utilityTab').dataset.sidePanelTab,$('#utilityTab').textContent);$('#openSidePanelTab').onclick=()=>setSidePanelView('launcher','New tab');for(const action of document.querySelectorAll('[data-side-panel-action]'))action.onclick=()=>action.dataset.sidePanelAction==='review'?openReviewPanel():openUtilityPanel(action.dataset.sidePanelAction);$('#browserAddressForm').onsubmit=event=>{event.preventDefault();navigateBrowser($('#browserUrl').value)};$('#browserBack').onclick=()=>moveBrowserHistory(-1);$('#browserForward').onclick=()=>moveBrowserHistory(1);$('#browserRefresh').onclick=()=>browserState.index>=0&&navigateBrowser(browserState.history[browserState.index],{push:false});$('#bottomPanelTab').onclick=()=>setBottomPanelView();for(const action of document.querySelectorAll('[data-bottom-panel-action]'))action.onclick=()=>setBottomPanelView(action.dataset.bottomPanelAction);$('#reviewMode').onclick=()=>{reviewPreferences.mode=reviewPreferences.mode==='unified'?'split':'unified';saveReviewPreferences();renderChanges()};$('#reviewWrap').onclick=()=>{reviewPreferences.wrap=!reviewPreferences.wrap;saveReviewPreferences();renderChanges()};$('#reviewExpand').onclick=()=>{reviewPreferences.expanded=!reviewPreferences.expanded;saveReviewPreferences();renderChanges()};$('#reviewPatch').onclick=applyActiveReviewPatch;$('#composer').addEventListener('submit',submitPrompt);$('#prompt').addEventListener('input',handlePromptInput);$('#prompt').addEventListener('click',updateComposerAutocomplete);$('#prompt').addEventListener('keyup',event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key))updateComposerAutocomplete()});$('#prompt').addEventListener('keydown',handlePromptKeydown);$('#threadSearch').addEventListener('input',renderThreads);$('#modelButton').addEventListener('click',toggleModelMenu);$('#modeButton').onclick=togglePermissionMenu;$('#confirmFullAccess').onclick=()=>{const action=pendingFullAccessAction;$('#fullAccessDialog').close();if(action==='enable')setPermissionVisibility('fullAccess',true);else setPermissionMode('full-access');pendingFullAccessAction='select'};$('#fullAccessDialog').addEventListener('close',()=>{pendingFullAccessAction='select';syncPermissionSettings()});document.querySelector('[data-composer-control="add"]').onclick=()=>$('#composerFileInput').click();$('#composerFileInput').onchange=async event=>{const input=event.currentTarget;await uploadFilesToWorkspace(input.files);input.value=''};$('#prompt').addEventListener('compositionstart',()=>{promptComposing=true});$('#prompt').addEventListener('compositionend',()=>{promptComposing=false});$('#prompt').addEventListener('paste',event=>{const files=[...(event.clipboardData?.files||[])];if(files.length){event.preventDefault();void uploadFilesToWorkspace(files)}});$('#composer').addEventListener('dragover',event=>{if(event.dataTransfer?.types?.includes('Files'))event.preventDefault()});$('#composer').addEventListener('drop',event=>{const files=[...(event.dataTransfer?.files||[])];if(files.length){event.preventDefault();void uploadFilesToWorkspace(files)}});$('#filesUpButton').onclick=()=>fileBrowserState.parent!==null&&loadWorkspaceFiles(fileBrowserState.parent);$('#filesRefreshButton').onclick=()=>loadWorkspaceFiles(fileBrowserState.dir);$('#filesUploadButton').onclick=()=>$('#composerFileInput').click();$('#filesChooseProjectButton').onclick=openFolderPicker;$('#filesTerminalButton').onclick=()=>{openUtilityPanel('terminal')};$('#sidebarTerminalButton').onclick=()=>{openUtilityPanel('terminal')};$('#filesClosePreviewButton').onclick=closeFilePreview;$('#filesOpenSidebarButton').onclick=()=>{if(overlayPanelsEnabled())setSidePanelOpen(false,false);setSidebarOpen(true);setSidebarView('files')};$('#sidebarTabSessions').onclick=()=>setSidebarView('sessions');$('#sidebarTabFiles').onclick=()=>setSidebarView('files');$('#threadActionsButton').onclick=event=>{event.stopPropagation();toggleThreadActionsMenu()};$('#threadRenameAction').onclick=()=>{closeThreadActionsMenu();void renameActiveThread()};$('#threadExportMarkdownAction').onclick=()=>{closeThreadActionsMenu();exportActiveThread('md')};$('#threadExportJsonAction').onclick=()=>{closeThreadActionsMenu();exportActiveThread('json')};$('#threadCompactAction').onclick=()=>{closeThreadActionsMenu();void compactActiveThread()};$('#threadDeleteAction').onclick=()=>{closeThreadActionsMenu();if(state.active)void deleteThread(state.active)};document.querySelector('[data-composer-control="dictation"]').onclick=()=>toast('Dictation requires the native desktop audio bridge.');$('#newTask').onclick=()=>startNewTask({resetDraft:!state.active});$('#projectButton').onclick=openFolderPicker;$('#composerProjectButton').onclick=openFolderPicker;$('#projectlessOption').onclick=useProjectless;$('#accountButton').onclick=e=>{e.stopPropagation();if(state.account?.type==='chatgpt')toggleAccountMenu();else openSettings('general')};$('#folderGo').onclick=()=>loadFolders($('#folderPathInput').value);$('#folderPathInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();loadFolders(e.currentTarget.value)}};$('#folderUp').onclick=()=>folderBrowse.parent&&loadFolders(folderBrowse.parent);$('#folderConfirm').onclick=useSelectedFolder;$('#toggleSummaryPanel').onclick=()=>setSummaryPanelOpen($('#summaryPanel').hidden);$('#closeImageViewer').onclick=closeImageViewer;$('#imageViewerImage').onload=()=>{$('#imageViewerImage').hidden=false;$('#imageViewerError').hidden=true};$('#imageViewerImage').onerror=()=>{$('#imageViewerImage').hidden=true;$('#imageViewerError').hidden=false};$('#imageViewer').addEventListener('click',event=>{if(event.target===event.currentTarget)closeImageViewer()});$('#imageViewer').addEventListener('close',()=>{const image=$('#imageViewerImage');image.removeAttribute('src');if(imageViewerReturnFocus?.isConnected)imageViewerReturnFocus.focus();imageViewerReturnFocus=null});function mobileSidebarEnabled(){return innerWidth<720}
+$('#newTab').onclick=()=>setSidePanelView('launcher','New tab');$('#reviewTab').onclick=()=>openReviewPanel(state.activeReview);$('#utilityTab').onclick=()=>setSidePanelView($('#utilityTab').dataset.sidePanelTab,$('#utilityTab').textContent);$('#openSidePanelTab').onclick=()=>setSidePanelView('launcher','New tab');for(const action of document.querySelectorAll('[data-side-panel-action]'))action.onclick=()=>action.dataset.sidePanelAction==='review'?openReviewPanel():openUtilityPanel(action.dataset.sidePanelAction);$('#browserAddressForm').onsubmit=event=>{event.preventDefault();navigateBrowser($('#browserUrl').value)};$('#browserBack').onclick=()=>moveBrowserHistory(-1);$('#browserForward').onclick=()=>moveBrowserHistory(1);$('#browserRefresh').onclick=()=>browserState.index>=0&&navigateBrowser(browserState.history[browserState.index],{push:false});$('#bottomPanelTab').onclick=()=>setBottomPanelView();for(const action of document.querySelectorAll('[data-bottom-panel-action]'))action.onclick=()=>setBottomPanelView(action.dataset.bottomPanelAction);$('#reviewMode').onclick=()=>{reviewPreferences.mode=reviewPreferences.mode==='unified'?'split':'unified';saveReviewPreferences();renderChanges()};$('#reviewWrap').onclick=()=>{reviewPreferences.wrap=!reviewPreferences.wrap;saveReviewPreferences();renderChanges()};$('#reviewExpand').onclick=()=>{reviewPreferences.expanded=!reviewPreferences.expanded;saveReviewPreferences();renderChanges()};$('#reviewPatch').onclick=applyActiveReviewPatch;$('#composer').addEventListener('submit',submitPrompt);$('#prompt').addEventListener('input',handlePromptInput);$('#prompt').addEventListener('click',updateComposerAutocomplete);$('#prompt').addEventListener('keyup',event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key))updateComposerAutocomplete()});$('#prompt').addEventListener('keydown',handlePromptKeydown);$('#threadSearch').addEventListener('input',renderThreads);$('#modelButton').addEventListener('click',toggleModelMenu);$('#modeButton').onclick=togglePermissionMenu;$('#confirmFullAccess').onclick=()=>{const action=pendingFullAccessAction;$('#fullAccessDialog').close();if(action==='enable')setPermissionVisibility('fullAccess',true);else setPermissionMode('full-access');pendingFullAccessAction='select'};$('#fullAccessDialog').addEventListener('close',()=>{pendingFullAccessAction='select';syncPermissionSettings()});document.querySelector('[data-composer-control="add"]').onclick=()=>$('#composerFileInput').click();$('#composerFileInput').onchange=async event=>{const input=event.currentTarget;await uploadFilesToWorkspace(input.files);input.value=''};$('#prompt').addEventListener('compositionstart',()=>{promptComposing=true});$('#prompt').addEventListener('compositionend',()=>{promptComposing=false});$('#prompt').addEventListener('paste',event=>{const files=[...(event.clipboardData?.files||[])];if(files.length){event.preventDefault();void uploadFilesToWorkspace(files)}});$('#composer').addEventListener('dragover',event=>{if(event.dataTransfer?.types?.includes('Files'))event.preventDefault()});$('#composer').addEventListener('drop',event=>{const files=[...(event.dataTransfer?.files||[])];if(files.length){event.preventDefault();void uploadFilesToWorkspace(files)}});$('#filesUpButton').onclick=()=>fileBrowserState.parent!==null&&loadWorkspaceFiles(fileBrowserState.parent);$('#filesRefreshButton').onclick=()=>loadWorkspaceFiles(fileBrowserState.dir);$('#filesUploadButton').onclick=()=>$('#composerFileInput').click();$('#filesChooseProjectButton').onclick=openFolderPicker;$('#filesTerminalButton').onclick=()=>{openUtilityPanel('terminal')};$('#sidebarTerminalButton').onclick=()=>{openUtilityPanel('terminal')};$('#filesClosePreviewButton').onclick=closeFilePreview;$('#filesOpenSidebarButton').onclick=()=>{if(overlayPanelsEnabled())setSidePanelOpen(false,false);setSidebarOpen(true);setSidebarView('files')};$('#sidebarTabSessions').onclick=()=>setSidebarView('sessions');$('#sidebarTabFiles').onclick=()=>setSidebarView('files');$('#sidebarTabSkills').onclick=()=>setSidebarView('skills');$('#skillsFilterOfficial').onclick=()=>setSkillsFilter('official');$('#skillsFilterPersonal').onclick=()=>setSkillsFilter('personal');$('#skillsNewButton').onclick=()=>openNewPersonalSkillEditor();$('#skillsRefreshButton').onclick=()=>void loadSkillsCatalog(true);$('#skillsSearchInput').oninput=event=>{skillsState.query=event.currentTarget.value||'';renderSkillsList()};$('#threadActionsButton').onclick=event=>{event.stopPropagation();toggleThreadActionsMenu()};$('#threadRenameAction').onclick=()=>{closeThreadActionsMenu();void renameActiveThread()};$('#threadExportMarkdownAction').onclick=()=>{closeThreadActionsMenu();exportActiveThread('md')};$('#threadExportJsonAction').onclick=()=>{closeThreadActionsMenu();exportActiveThread('json')};$('#threadCompactAction').onclick=()=>{closeThreadActionsMenu();void compactActiveThread()};$('#threadDeleteAction').onclick=()=>{closeThreadActionsMenu();if(state.active)void deleteThread(state.active)};document.querySelector('[data-composer-control="dictation"]').onclick=()=>toast('Dictation requires the native desktop audio bridge.');$('#newTask').onclick=()=>startNewTask({resetDraft:!state.active});$('#projectButton').onclick=openFolderPicker;$('#composerProjectButton').onclick=openFolderPicker;$('#projectlessOption').onclick=useProjectless;$('#accountButton').onclick=e=>{e.stopPropagation();if(state.account?.type==='chatgpt')toggleAccountMenu();else openSettings('general')};$('#folderGo').onclick=()=>loadFolders($('#folderPathInput').value);$('#folderPathInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();loadFolders(e.currentTarget.value)}};$('#folderUp').onclick=()=>folderBrowse.parent&&loadFolders(folderBrowse.parent);$('#folderConfirm').onclick=useSelectedFolder;$('#toggleSummaryPanel').onclick=()=>setSummaryPanelOpen($('#summaryPanel').hidden);$('#closeImageViewer').onclick=closeImageViewer;$('#imageViewerImage').onload=()=>{$('#imageViewerImage').hidden=false;$('#imageViewerError').hidden=true};$('#imageViewerImage').onerror=()=>{$('#imageViewerImage').hidden=true;$('#imageViewerError').hidden=false};$('#imageViewer').addEventListener('click',event=>{if(event.target===event.currentTarget)closeImageViewer()});$('#imageViewer').addEventListener('close',()=>{const image=$('#imageViewerImage');image.removeAttribute('src');if(imageViewerReturnFocus?.isConnected)imageViewerReturnFocus.focus();imageViewerReturnFocus=null});function mobileSidebarEnabled(){return innerWidth<720}
 $('#sidebarSearchButton').onclick=event=>{event.stopPropagation();setSidebarSearchOpen($('#sidebarSearchPanel').hidden)};$('#sidebarSearchClose').onclick=()=>setSidebarSearchOpen(false);$('#sidebarHelpButton').onclick=event=>{event.stopPropagation();setSidebarHelpOpen($('#sidebarHelpMenu').hidden)};$('#sidebarHelpSettings').onclick=()=>{setSidebarHelpOpen(false);openSettings('general-settings')};$('#sidebarHelpShortcuts').onclick=()=>{setSidebarHelpOpen(false);openSettings('keyboard-shortcuts')};$('#accountSettings').onclick=()=>openSettings('general-settings');$('#accountProfile').onclick=()=>openSettings('profile');$('#accountUsage').onclick=()=>openSettings('profile');$('#accountShortcuts').onclick=()=>openSettings('keyboard-shortcuts');for(const button of document.querySelectorAll('[data-settings-page]'))button.onclick=()=>setSettingsPage(button.dataset.settingsPage);$('#settingsAutoReviewToggle').onchange=event=>setPermissionVisibility('autoReview',event.currentTarget.checked);$('#settingsTaskNotifyToggle').onchange=event=>setTaskNotifyEnabled(event.currentTarget.checked);$('#settingsFullAccessToggle').onchange=event=>{if(!event.currentTarget.checked){setPermissionVisibility('fullAccess',false);return}event.currentTarget.checked=false;pendingFullAccessAction='enable';const dialog=$('#fullAccessDialog');if(!dialog.open)dialog.showModal()};$('#accountLogout').onclick=async()=>{if(!confirm('Log out?'))return;try{await rpc('account/logout');toggleAccountMenu(false);await loadAccount(true)}catch(error){toast(error.message)}};$('#settingsDialog').addEventListener('cancel',event=>{event.preventDefault();closeSettings()});
+$('#settingsSkillsButton').onclick=()=>{closeSettings();setSidebarOpen(true);setSidebarView('skills')};
 $('#languageSelect').value=i18n.preference;
 $('#languageSelect').onchange=event=>i18n.setPreference(event.currentTarget.value);
 const systemThemeQuery=matchMedia('(prefers-color-scheme: dark)');
@@ -1096,13 +1410,13 @@ function refreshLocalizedRuntime(){
   if(!folderBrowse.selected)$('#folderSelection').textContent=t('No folder selected');
   if(state.account)renderAccount(state.account);else for(const id of ['accountName','accountMenuName','settingsAccountName'])$(`#${id}`).textContent=t('Settings');
   syncPermissionControl();syncModelLabel();refreshComposerPlaceholder();syncAccountQuotaMeta();renderContextUsage();renderChanges();
-  syncComposerSubmitState();
+  syncComposerSubmitState();renderSkillsList();
   if(!$('#modelMenu').hidden)renderModelMenuMain();
   if($('#settingsDialog').open){const current=document.querySelector('[data-settings-page].active')?.dataset.settingsPage||settingsRoutePage()||'general-settings';setSettingsPage(current,{updateRoute:false});filterSettingsNavigation($('#settingsSearch').value)}
 }
 i18n.subscribe(refreshLocalizedRuntime);
 refreshLocalizedRuntime();
 $('#toggleSidePanel').onclick=()=>setSidePanelOpen($('#sidePanel').hidden);$('#toggleBottomPanel').onclick=()=>setBottomPanelOpen($('#bottomPanel').hidden);$('#closeBottomPanel').onclick=()=>setBottomPanelOpen(false);$('#toggleSidebar').onclick=()=>setSidebarOpen(mobileSidebarEnabled()?!$('#sidebar').classList.contains('mobile-open'):document.body.classList.contains('sidebar-hidden'),{manual:true});$('#closeSidePanel').onclick=()=>setSidePanelOpen(false);$('#closeSummaryPanel').onclick=()=>setSummaryPanelOpen(false);document.addEventListener('click',e=>{const target=e.target instanceof Element?e.target:null,image=target?.closest('[data-image-src]');if(image){e.preventDefault();openImageViewer(image.dataset.imageSrc,image.dataset.imageTitle||image.querySelector('img')?.alt||'Image',image.dataset.imagePath||'');return}if(target?.closest('a[data-file-download]'))return;const citation=target?.closest('a[data-file-reference]');if(!citation)return;e.preventDefault();const path=citation.dataset.fileReference,event=new CustomEvent('codex-webui:file-reference',{cancelable:true,detail:{path,lineStart:Number(citation.dataset.fileLineStart)||null,lineEnd:Number(citation.dataset.fileLineEnd)||null}});dispatchEvent(event);if(!event.defaultPrevented&&path&&!$('#sidePanel').hidden)void previewWorkspaceFile(path)});document.addEventListener('click',e=>{const path=e.composedPath();if(!path.includes($('#modelPicker')))closeModelMenu();if(!path.includes($('#permissionPicker')))closePermissionMenu();if(!path.includes($('#accountMenu'))&&!path.includes($('#accountButton')))toggleAccountMenu(false);if(!path.includes($('#threadActionsWrap')))closeThreadActionsMenu();if(!path.includes($('#sidebarSearchPanel'))&&!path.includes($('#sidebarSearchButton')))setSidebarSearchOpen(false);if(!path.includes($('#sidebarHelpMenu'))&&!path.includes($('#sidebarHelpButton')))setSidebarHelpOpen(false)});document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;if(initialLoadIncomplete())loadInitial();scheduleThreadListRefresh(0);scheduleActiveThreadSync(0)});addEventListener('keydown',e=>{if(e.target instanceof Element&&e.target.closest('.terminal-host'))return;if(e.key==='Escape'){if($('#imageViewer').open){e.preventDefault();closeImageViewer();return}if($('#folderDialog').open||$('#fullAccessDialog').open)return;if(e.defaultPrevented)return;if(!$('#sidebarSearchPanel').hidden){e.preventDefault();setSidebarSearchOpen(false);return}if(!$('#sidebarHelpMenu').hidden){e.preventDefault();setSidebarHelpOpen(false);return}if($('#settingsDialog').open){e.preventDefault();closeSettings();return}closeModelMenu();closePermissionMenu();toggleAccountMenu(false);closeThreadActionsMenu();if(document.body.classList.contains('side-panel-open'))setSidePanelOpen(false);else if(document.body.classList.contains('summary-panel-open'))setSummaryPanelOpen(false)}if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();startNewTask()}if((e.metaKey||e.ctrlKey)&&e.key==='b'){e.preventDefault();$('#toggleSidebar').click()}if((e.metaKey||e.ctrlKey)&&e.key==='j'){e.preventDefault();openUtilityPanel('terminal')}});addEventListener('resize',()=>{syncOverlayPanelMode();syncSidebarLayout();for(const terminalState of Object.values(terminalStates))requestAnimationFrame(()=>fitTerminal(terminalState))});
-globalThis.__codexWebuiDebug={notify:onNotification,request:onServerRequest,state,browserState,fileBrowserState,navigateBrowser,setSidebarView,openFilesPanel,openReviewPanel,openUtilityPanel,loadWorkspaceFiles,previewWorkspaceFile,uploadFilesToWorkspace,mentionWorkspaceFile,applyRateLimits,loadRateLimits,renameActiveThread,exportActiveThread,compactActiveThread,renderChanges,renderAccount,renderHeader,refreshComposerPlaceholder,setProjectless,openImageViewer,openThread,loadInitial,startNewTask,setSidebarOpen,openSettings,closeSettings,settingsRoutePage,selectedPermission,permissionThreadPolicy,permissionTurnPolicy,setPermissionMode,setPermissionProfiles,setPermissionVisibility,renderPermissionMenu,filterAppModels,renderModels,syncTurnSnapshot,recordTurnReview,scrollOpenedThreadToBottom,setThemePreference,getThemePreference:()=>themePreference};
+globalThis.__codexWebuiDebug={notify:onNotification,request:onServerRequest,state,browserState,fileBrowserState,skillsState,navigateBrowser,setSidebarView,openFilesPanel,openReviewPanel,openUtilityPanel,loadWorkspaceFiles,previewWorkspaceFile,uploadFilesToWorkspace,mentionWorkspaceFile,loadSkillsCatalog,setSkillsFilter,inspectSkillItem,openNewPersonalSkillEditor,saveSkillFromEditor,attachSkillToComposer,applyRateLimits,loadRateLimits,renameActiveThread,exportActiveThread,compactActiveThread,renderChanges,renderAccount,renderHeader,refreshComposerPlaceholder,setProjectless,openImageViewer,openThread,loadInitial,startNewTask,setSidebarOpen,openSettings,closeSettings,settingsRoutePage,selectedPermission,permissionThreadPolicy,permissionTurnPolicy,setPermissionMode,setPermissionProfiles,setPermissionVisibility,renderPermissionMenu,filterAppModels,renderModels,syncTurnSnapshot,recordTurnReview,scrollOpenedThreadToBottom,setThemePreference,getThemePreference:()=>themePreference};
 async function boot(){const savedProject=localStorage.getItem('codex-webui-project');syncSidebarLayout();syncPermissionControl();try{state.config=await fetch('/api/config').then(r=>r.json())}catch{}if(state.config.projectless||savedProject==='~')setProjectless();else setWorkspace(savedProject||state.config.defaultCwd||'.');restoreActiveDraft();refreshComposerPlaceholder();const initialSettingsPage=settingsRoutePage();if(initialSettingsPage)showSettings(initialSettingsPage,{updateRoute:false});connect()}
 boot();

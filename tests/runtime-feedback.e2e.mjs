@@ -50,6 +50,7 @@ async function fixture(browser,mobile=false){
     const data={
       '/api/auth/status':{authenticated:true},'/api/config':{home:'/home/test',defaultCwd:'/workspace'},
       '/api/account':{type:'unknown'},'/api/workspace/context':{cwd:'/workspace',project:'workspace',branch:'test'},
+      '/api/skills/catalog':{skills:[],curated:[],errors:[],extraRoots:[]},
     }[url.pathname];
     assert.ok(data,`Unexpected HTTP endpoint: ${url.pathname}`);
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});

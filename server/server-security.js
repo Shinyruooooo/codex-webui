@@ -5,6 +5,8 @@ import { resolve, sep } from "node:path";
 const BROWSER_RPC_METHODS = new Set([
   "model/list",
   "permissionProfile/list",
+  "skills/list",
+  "skills/config/write",
   "account/logout",
   "account/rateLimits/read",
   "thread/list",

@@ -74,6 +74,8 @@ export function getComposerAutocomplete(text, cursor = text.length) {
     const start = before.indexOf("/");
     return { type: "slash", query: slash[1], start, end };
   }
+  const skill = before.match(/(?:^|\s)\$([a-z0-9-]*)$/i);
+  if (skill) return { type: "skill", query: skill[1], start: before.lastIndexOf("$"), end };
   const quotedMention = before.match(/(?:^|\s)@"([^"\n]*)$/);
   if (quotedMention) {
     const start = end - (quotedMention[1].length + 2);

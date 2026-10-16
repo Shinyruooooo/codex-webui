@@ -847,6 +847,64 @@ body.sidebar-hidden .sidebar>div{opacity:0}
 .files-preview-body img{display:block;max-width:100%;max-height:70vh;margin:0 auto;border-radius:6px;object-fit:contain}
 .files-preview-note{margin-top:8px;color:var(--app-text-tertiary);font-size:11px}
 
+/* DSH-inspired Skills management surface (Official & Personal). */
+.sidebar-skills-section{display:flex;flex-direction:column;padding:6px 6px 8px;gap:6px;overflow:hidden}
+.skills-toolbar{height:30px;flex:0 0 30px;display:flex;align-items:center;gap:4px;padding:0 2px}
+.skills-filter-tabs{flex:1;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px;padding:2px;border:1px solid var(--app-border-default);border-radius:8px;background:var(--app-fog)}
+.skills-filter-tab{height:24px;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:0 6px;border-radius:6px;color:var(--app-text-secondary);font-size:11.5px;font-weight:500;white-space:nowrap}
+.skills-filter-tab:hover{color:var(--app-text)}
+.skills-filter-tab.active{background:var(--app-main);color:var(--app-text);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.skills-filter-tab span{color:var(--app-text-tertiary);font:10px var(--mono);font-variant-numeric:tabular-nums}
+.skills-search-box{height:30px;flex:0 0 30px;display:flex;align-items:center;gap:6px;padding:0 8px;border:1px solid var(--app-border-default);border-radius:8px;background:var(--app-input);color:var(--app-text-tertiary)}
+.skills-search-box:focus-within{border-color:color-mix(in srgb,var(--app-text) 28%,var(--app-border-default))}
+.skills-search-box .icon-slot,.skills-search-box .icon-slot svg{width:14px;height:14px;min-width:14px}
+.skills-search-box input{min-width:0;flex:1;border:0;outline:0;background:transparent;color:var(--app-text);font-size:12px}
+.skills-search-box input::placeholder{color:var(--app-text-tertiary)}
+.skills-list{min-height:0;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:2px 2px 6px;scrollbar-width:thin;scrollbar-color:var(--app-border-default) transparent}
+.skills-group-heading{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:6px 6px 2px;color:var(--app-text-tertiary);font-size:11px;font-weight:600;letter-spacing:.02em}
+.skills-card{flex-shrink:0;display:flex;flex-direction:column;gap:4px;padding:8px 9px;border:1px solid var(--app-border-default);border-radius:10px;background:var(--app-fog);color:var(--app-text);cursor:pointer;transition:border-color .14s,background .14s}
+.skills-card:hover,.skills-card.active{border-color:color-mix(in srgb,var(--app-text) 22%,var(--app-border-default));background:var(--app-hover)}
+.skills-card.is-disabled{opacity:.64}
+.skills-card:focus-visible{outline:2px solid var(--app-link);outline-offset:-2px}
+.skills-mini-btn:disabled,.skills-switch:disabled{cursor:default;opacity:.5}
+.skills-notice{padding:6px;color:var(--app-text-tertiary);font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere}
+.skills-card-head{display:flex;align-items:center;gap:6px;min-width:0}
+.skills-card-title{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;font-weight:600;color:var(--app-text)}
+.skill-scope-badge{flex:0 0 auto;display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:500;line-height:15px;background:color-mix(in srgb,var(--app-text) 8%,transparent);color:var(--app-text-secondary)}
+.skill-scope-badge.is-official{background:color-mix(in srgb,var(--app-link) 15%,transparent);color:var(--app-link)}
+.skill-scope-badge.is-personal{background:color-mix(in srgb,var(--app-success) 16%,transparent);color:var(--app-success)}
+.skill-scope-badge.is-curated{background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)}
+.skills-card-desc{display:-webkit-box;overflow:hidden;color:var(--app-text-secondary);font-size:11.5px;line-height:16px;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.skills-card-foot{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:2px}
+.skills-card-id{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--app-text-tertiary);font:10.5px var(--mono)}
+.skills-card-actions{display:inline-flex;align-items:center;gap:5px;margin-left:auto}
+.skills-mini-btn{height:21px;display:inline-flex;align-items:center;padding:0 7px;border:1px solid var(--app-border-default);border-radius:6px;background:var(--app-panel);color:var(--app-text-secondary);font-size:10.5px;font-weight:500}
+.skills-mini-btn:hover:not(:disabled){background:var(--app-main);color:var(--app-text);border-color:color-mix(in srgb,var(--app-text) 24%,var(--app-border-default))}
+.skills-mini-btn.primary{color:var(--app-link)}
+.skills-switch{position:relative;width:28px;height:16px;flex:0 0 28px;border-radius:999px;background:color-mix(in srgb,var(--app-text) 18%,transparent);transition:background .15s}
+.skills-switch[aria-checked=true]{background:var(--app-success)}
+.skills-switch::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform .15s}
+.skills-switch[aria-checked=true]::after{transform:translateX(12px)}
+.side-panel-skills{min-height:0;flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--app-panel)}
+.side-panel-skills[hidden]{display:none}
+@media(min-width:1201px){body.skills-panel-open.side-panel-open{--right-panel-w:min(42vw,560px)}}
+.skills-inspector{min-height:0;flex:1;display:flex;flex-direction:column;background:var(--app-main)}
+.skills-inspector-toolbar{flex-wrap:wrap}
+.skills-inspector-toolbar .files-preview-actions{flex-wrap:wrap}
+.skills-inspector-heading{min-width:0;flex:1 1 100%;display:flex;align-items:center;gap:6px;overflow:hidden}
+.skills-inspector-heading strong{flex:0 1 auto}
+.skills-inspector-meta{padding:5px 12px;border-bottom:1px solid var(--app-border);background:var(--app-fog);color:var(--app-text-tertiary);font:10.5px/15px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.skills-inspector-meta:empty{display:none}
+.skills-inspector-body[hidden],.skills-editor-wrap[hidden],.skills-create-fields[hidden]{display:none!important}
+.skills-editor-wrap{min-height:0;flex:1;display:flex;flex-direction:column;gap:8px;padding:10px 12px}
+.skills-create-fields{display:flex;flex-direction:column;gap:8px}
+.skills-field{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--app-text-secondary)}
+.skills-field input{height:30px;padding:0 9px;border:1px solid var(--app-border-default);border-radius:7px;outline:0;background:var(--app-input);color:var(--app-text);font-size:12px}
+.skills-field input:focus{border-color:color-mix(in srgb,var(--app-text) 32%,var(--app-border-default))}
+.skills-editor-textarea{min-height:0;flex:1;width:100%;padding:10px;border:1px solid var(--app-border-default);border-radius:8px;outline:0;resize:none;background:var(--app-input);color:var(--app-text);font:12px/1.55 var(--mono)}
+.skills-editor-textarea:focus{border-color:color-mix(in srgb,var(--app-text) 32%,var(--app-border-default))}
+.files-action-button.danger{color:var(--app-danger);border-color:color-mix(in srgb,var(--app-danger) 35%,var(--app-border-default))}
+
 /* 主题偏好：system 跟随系统（由 prefers-color-scheme 决定），light/dark 为显式选择。
    显式选择通过 :root[data-theme] 覆盖上面的默认令牌，因此要放在文件最后。 */
 :root[data-theme=light]{

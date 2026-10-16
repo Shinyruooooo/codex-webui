@@ -1,5 +1,5 @@
 import { closeSync, createReadStream, existsSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve, extname } from "node:path";
+import { dirname, join, relative, resolve, extname } from "node:path";
 import { gzipSync } from "node:zlib";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -16,6 +16,17 @@ import { searchWorkspaceFiles } from "./server/file-search.js";
 import { WORKSPACE_UPLOAD_MAX_BYTES, listWorkspaceDirectory, openVerifiedLocalFile, readWorkspaceFilePreview, resolveLocalFile, saveWorkspaceUpload } from "./server/file-service.js";
 import { readVerifiedLocalImage, resolveLocalImage } from "./server/image-service.js";
 import { LiveSessionStore } from "./server/live-session-service.js";
+import {
+  assertWritableCodexHome,
+  defaultSkillExtraRoots,
+  deletePersonalSkill,
+  installCuratedOfficialSkill,
+  isEditablePersonalSkillPath,
+  listCuratedOfficialSkills,
+  isOfficialCuratedSkillPath,
+  readSkillFile,
+  savePersonalSkill,
+} from "./server/skill-service.js";
 import {
   createLoginRateLimiter,
   createPasswordSession,
@@ -72,7 +83,10 @@ const pending = new Map<number, { resolve: (value: any) => void; reject: (error:
 const reviewDiffs = new ReviewDiffStore();
 const liveSessions = new LiveSessionStore();
 const threadPaths = new Map<string, string>();
-let codexSessionsRoot = resolve(homeDir, ".codex", "sessions");
+let codexHomeDir = resolve(process.env.CODEX_HOME || join(homeDir, ".codex"));
+assertWritableCodexHome(codexHomeDir, homeDir);
+let codexSessionsRoot = resolve(codexHomeDir, "sessions");
+let skillExtraRoots = defaultSkillExtraRoots(homeDir, process.env.CODEX_WEBUI_SKILL_EXTRA_ROOTS || "");
 let seq = 1;
 let codex: ChildProcessWithoutNullStreams | null = null;
 let stdoutBuffer = "";
@@ -188,7 +202,16 @@ async function initialize() {
     capabilities: { experimentalApi: true },
   });
   sendRaw({ method: "initialized", params: {} });
-  if (typeof result?.codexHome === "string") codexSessionsRoot = resolve(result.codexHome, "sessions");
+  if (typeof result?.codexHome === "string") {
+    codexHomeDir = resolve(result.codexHome);
+    codexSessionsRoot = resolve(codexHomeDir, "sessions");
+  }
+  skillExtraRoots = defaultSkillExtraRoots(homeDir, process.env.CODEX_WEBUI_SKILL_EXTRA_ROOTS || "");
+  if (skillExtraRoots.length > 0) {
+    await request("skills/extraRoots/set", { extraRoots: skillExtraRoots }).catch((error) => {
+      console.warn("[codex-webui] skills/extraRoots/set failed:", error instanceof Error ? error.message : String(error));
+    });
+  }
   connected = true;
   broadcast({ type: "bridge/status", status: "connected", info: result });
 }
@@ -318,7 +341,31 @@ function sanitizeBrowserRpcParams(method: string, rawParams: any) {
   } else if (method === "thread/start" && !projectless) {
     params.cwd = resolveBrowsePath(defaultCwd, browseRoots, homeDir);
   }
+  if (method === "skills/list") {
+    if (params.cwds !== undefined && (!Array.isArray(params.cwds) || params.cwds.length > 10)) throw new Error("Invalid skill workspace list");
+    params.cwds = (params.cwds?.length ? params.cwds : [defaultCwd]).map((item: unknown) => {
+      if (typeof item !== "string" || !item.trim()) throw new Error("Invalid skill workspace");
+      const cwd = resolveBrowsePath(item, browseRoots, homeDir);
+      if (!isDirectory(cwd)) throw new Error("Skill workspace is not an available directory");
+      return cwd;
+    });
+  }
   return params;
+}
+
+async function nativeSkillsFor(cwd: string, forceReload = false) {
+  const result = await request("skills/list", { cwds: [cwd], forceReload });
+  const entry = result?.data?.find((item: any) => item.cwd === cwd) || result?.data?.[0];
+  if (!entry || !Array.isArray(entry.skills)) throw new Error("Codex did not return a skill catalog");
+  return entry;
+}
+
+async function validateSkillSelection(params: any) {
+  const cwd = params.cwd || defaultCwd;
+  const entry = await nativeSkillsFor(cwd);
+  const selected = entry.skills.find((skill: any) => skill.path === params.path);
+  if (!selected) throw new Error("Skill is not in the current Codex catalog");
+  return selected;
 }
 
 async function dispatchBrowserMessage(message: any) {
@@ -327,6 +374,16 @@ async function dispatchBrowserMessage(message: any) {
     try {
       if (!isAllowedBrowserRpcMethod(message.method)) throw new Error("RPC method is not available to browser clients");
       const params = sanitizeBrowserRpcParams(message.method, message.params);
+      if (message.method === "skills/config/write") {
+        if (typeof params.path !== "string" || typeof params.enabled !== "boolean") throw new Error("Skill path and boolean enabled are required");
+        assertWritableCodexHome(codexHomeDir, homeDir);
+        await validateSkillSelection(params);
+        // The catalog lookup is asynchronous; the destination must still be safe
+        // when the native configuration write is actually dispatched.
+        assertWritableCodexHome(codexHomeDir, homeDir);
+        delete params.name;
+        delete params.cwd;
+      }
       const result = message.method === "host/thread/live"
         ? await readLiveThread(params.threadId)
         : await request(message.method, params);
@@ -773,6 +830,139 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify({ cwd, query, items }));
     } catch (error) {
       res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/skills/catalog") {
+    if (req.method !== "GET") {
+      res.writeHead(405, { "content-type": "application/json; charset=utf-8", allow: "GET", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: "Method not allowed" }));
+      return;
+    }
+    try {
+      const requestedCwd = url.searchParams.get("cwd") || defaultCwd;
+      const cwd = resolveBrowsePath(requestedCwd, browseRoots, homeDir);
+      const forceReload = url.searchParams.get("refresh") === "1";
+      const skillsEntry = await nativeSkillsFor(cwd, forceReload);
+      const skills = skillsEntry.skills.map((skill: any) => {
+        const path = String(skill?.path || "");
+        const scope = String(skill?.scope || "user");
+        const editable = isEditablePersonalSkillPath(path, codexHomeDir);
+        const category = scope === "system" || isOfficialCuratedSkillPath(path, codexHomeDir) ? "official" : "personal";
+        const sourceKind = scope === "system"
+          ? "system"
+          : scope === "repo"
+            ? "project"
+            : editable
+              ? "personal"
+              : "external";
+        return {
+          ...skill,
+          category,
+          sourceKind,
+          editable,
+        };
+      });
+      const curated = listCuratedOfficialSkills({ codexHome: codexHomeDir, installedSkills: skills });
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify({
+        cwd,
+        codexHome: codexHomeDir,
+        personalRoot: resolve(codexHomeDir, "skills"),
+        extraRoots: skillExtraRoots,
+        skills,
+        curated,
+        errors: Array.isArray(skillsEntry.errors) ? skillsEntry.errors : [],
+      }));
+    } catch (error) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/skills/file") {
+    if (req.method !== "GET") {
+      res.writeHead(405, { "content-type": "application/json; charset=utf-8", allow: "GET", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: "Method not allowed" }));
+      return;
+    }
+    try {
+      const targetPath = url.searchParams.get("path") || "";
+      const cwd = resolveBrowsePath(url.searchParams.get("cwd") || defaultCwd, browseRoots, homeDir);
+      const entry = await nativeSkillsFor(cwd);
+      const curated = listCuratedOfficialSkills({ codexHome: codexHomeDir, installedSkills: entry.skills });
+      if (!entry.skills.some((skill: any) => skill.path === targetPath) && !curated.some((skill: any) => skill.sourcePath === targetPath)) throw new Error("Skill is not in the current Codex catalog");
+      const file = readSkillFile(targetPath, {
+        codexHome: codexHomeDir,
+        homeDir,
+        browseRoots,
+        // Exact native/catalog membership was checked above; admin/external skills
+        // need read-only access even if their directory is outside workspace browsing roots.
+        extraRoots: [...skillExtraRoots, dirname(targetPath)],
+      });
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify(file));
+    } catch (error) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/skills/personal") {
+    if (req.method !== "POST" && req.method !== "DELETE") {
+      res.writeHead(405, { "content-type": "application/json; charset=utf-8", allow: "POST, DELETE", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: "Method not allowed" }));
+      return;
+    }
+    try {
+      const payload = await readJsonBody(req, 512_000);
+      if (req.method === "DELETE") {
+        const deleted = deletePersonalSkill({
+          name: payload?.name,
+          path: payload?.path,
+          codexHome: codexHomeDir,
+        });
+        try { await request("skills/list", { cwds: [defaultCwd], forceReload: true }); } catch {}
+        res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+        res.end(JSON.stringify(deleted));
+        return;
+      }
+      const saved = savePersonalSkill({
+        name: payload?.name,
+        content: payload?.content,
+        displayName: payload?.displayName,
+        description: payload?.description,
+        instructions: payload?.instructions,
+        overwrite: Boolean(payload?.overwrite),
+        codexHome: codexHomeDir,
+      });
+      try { await request("skills/list", { cwds: [defaultCwd], forceReload: true }); } catch {}
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify(saved));
+    } catch (error) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/skills/install") {
+    if (req.method !== "POST") {
+      res.writeHead(405, { "content-type": "application/json; charset=utf-8", allow: "POST", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: "Method not allowed" }));
+      return;
+    }
+    try {
+      const payload = await readJsonBody(req, 32_000);
+      const installed = installCuratedOfficialSkill({
+        id: payload?.id || payload?.name,
+        codexHome: codexHomeDir,
+      });
+      try { await request("skills/list", { cwds: [defaultCwd], forceReload: true }); } catch {}
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify(installed));
+    } catch (error) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
       res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
     }
     return;

@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [Unreleased]
+
+### Added
+- DSH-inspired Skills sidebar with Official / Personal groups, search, read-only instruction inspector, and native Codex enable/disable controls.
+- Personal skill creation, Markdown editing, and confirmed deletion under `$CODEX_HOME/skills/<id>` only; system/project/external skill files are read-only.
+- Offline installation of locally cached `openai/skills` curated bundles without executing their scripts, preserving resources and refusing unsafe paths.
+- `/skill-name` and `$skill-name` autocomplete and prompt chips serialized as native `UserInput.skill`; per-thread drafts retain selected skills.
+- Opt-in extra skill roots through `CODEX_WEBUI_SKILL_EXTRA_ROOTS`; no implicit import or modification of Pi skills.
+- Disposable-HOME integration coverage for real native skill discovery/configuration and browser management workflows without model inference.
+
 ## [0.4.0] - 2026-10-15
 
 ### Added

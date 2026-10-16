@@ -143,6 +143,22 @@ Codex WebUI can approve command execution and file changes on your machine. Trea
 
 See [SECURITY.md](./SECURITY.md) for the reporting policy.
 
+## Skills management (development branch)
+
+Use the **Skills** icon beside Chats / Files, or **Settings → General → Manage skills**.
+
+- **Official**: Codex system skills and installed curated skills; inspect instructions, use in a prompt, or toggle native Codex enablement. The curated catalog installs a complete bundle from the existing local `openai/skills` cache, never executes installation scripts, and never overwrites an existing skill.
+- **Personal**: Create, edit and delete direct personal bundles at `$CODEX_HOME/skills/<id>/SKILL.md`. Project/admin/external skills are visible but their files are read-only. Deletion removes the whole personal bundle and requires confirmation.
+- Type `/<skill-name>` or `$<skill-name>` and select a result, or click **Use**, to attach a native Codex skill input. File-path identity is kept so same-named skills from different sources are not silently merged.
+- The effective skill catalog and enablement come from `skills/list` / `skills/config/write`; invalid skill YAML is reported rather than shown as an invented enabled skill.
+- Extra directories are **opt-in** via `CODEX_WEBUI_SKILL_EXTRA_ROOTS=/path/to/skills,/other/skills`. Existing Pi/DSH directories are not imported automatically; explicitly mounted files remain read-only. Enabling/disabling writes Codex configuration, not the skill source.
+
+The curated catalog requires an already populated `$CODEX_HOME/vendor_imports/skills` cache (with `openai/skills` origin metadata) and `skills-curated-cache.json`. If unavailable, system/personal management still works; this version does not download a catalog. Origin metadata is a **local source hint, not a signature or security audit**. Review all third-party instructions and scripts before use. A copied/modified curated skill loses the official-cache classification when its bytes differ.
+
+Skills management is intended for a trusted, single-user host and authenticated LAN clients, not tenant isolation. On platforms without a supported descriptor-anchored mutation path, file mutations are refused rather than falling back to unsafe pathname writes. Skill source files under `~/.pi` are never writable through this manager.
+
+Development goes to `dev`; `main` and release tags change only at an explicitly approved release. See [CHANGELOG.md](./CHANGELOG.md) for unreleased changes.
+
 ## Review and approvals
 
 The WebUI handles app-server requests instead of drawing fake approval cards:

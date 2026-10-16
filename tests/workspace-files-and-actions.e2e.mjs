@@ -170,7 +170,7 @@ try {
   assert.equal(converged.dictationHidden, true);
   assert.equal(converged.sidebarToggleInHeading, true);
   assert.equal(converged.sidebarToggleLeftOfRightToggle, true);
-  assert.deepEqual(converged.sidebarTabs.map(item => item.tab), ['sessions', 'files']);
+  assert.deepEqual(converged.sidebarTabs.map(item => item.tab), ['sessions', 'files', 'skills']);
   assert.equal(converged.sidebarTabs.every(item => item.hasIcon && item.srOnlyText), true);
   assert.equal(converged.newTabLauncherHidden, true);
   assert.equal(converged.openSidePanelTabHidden, true);
@@ -285,6 +285,7 @@ try {
   assert.ok(turnStart.params.input.find(item => item.type === 'text').text.includes('@spec.txt'));
 
   // 7. Project switch must not overwrite the destination project's new-chat draft.
+  // Skills CRUD is covered by skills-management.e2e.mjs in an isolated CODEX_HOME.
   await page.click('#sidebarTabSessions');
   await page.click('#newTask');
   await page.evaluate(dir => {

@@ -1,64 +1,31 @@
 # Codex PiWeb UI
 
-<p align="center">
-  <strong>参考 Pi Web 风格改造、由真实 Codex app-server 驱动的本地/局域网 WebUI（二开版）。</strong>
-</p>
+[English](./README.md)
 
-<p align="center">
-  <a href="./README.md">English</a> ·
-  <a href="./CONTRIBUTING.md">贡献指南</a> ·
-  <a href="./SECURITY.md">安全政策</a>
-</p>
+面向 Codex CLI 的浏览器工作台，将对话、项目文件、终端和 Skills 放在同一个界面中。连接本机 `codex app-server`，支持本地和可信局域网使用。
 
-<p align="center">
-  <a href="./LICENSE"><img alt="MIT 许可证" src="https://img.shields.io/github/license/Shinyruooooo/codex-webui?style=flat-square"></a>
-  <a href="https://github.com/Shinyruooooo/codex-webui/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/Shinyruooooo/codex-webui?style=flat-square"></a>
-  <a href="https://github.com/Shinyruooooo/codex-webui/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/Shinyruooooo/codex-webui?style=flat-square"></a>
-  <a href="https://bun.sh/"><img alt="Bun 1.3 或更高版本" src="https://img.shields.io/badge/Bun-1.3%2B-fbf0df?style=flat-square&amp;logo=bun&amp;logoColor=000"></a>
-</p>
+## 功能
 
-> [!NOTE]
-> **二次开发与致谢说明：** 本项目（**Codex PiWeb UI**）是基于 [`lezi-fun/codex-webui`](https://github.com/lezi-fun/codex-webui)（MIT 许可证）进行的二次开发版本；界面三栏布局（左侧对话/文件树纯图标切换、中间对话与常驻运行状态/Token 统计栏、右侧由左侧唤起的文件预览/终端/Diff 面板）及基础交互体验参考了 [`agegr/pi-web`](https://github.com/agegr/pi-web)（MIT 许可证）。原始项目的版权声明与许可证完整保留在 [`LICENSE`](./LICENSE) 与 [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) 中。
+- 三栏工作台：会话列表、项目文件树，以及按需打开的预览、终端和 Diff 面板。
+- 流式回答、工具活动、命令与文件修改审批，支持选择模型和推理强度。
+- 会话重命名、草稿保存、上下文压缩、Markdown / JSON 导出及运行中、未读完成状态。
+- 文件预览、上传、拖拽附件和 `@` 文件引用。
+- 官方 / 个人 Skills 管理、启用开关、个人技能编辑，支持 `/技能名` 或 `$技能名` 选择调用。
+- 展示耗时，以及 Codex 返回的 Token、上下文使用量和账号额度。
+- 中英文界面、跟随系统 / 浅色 / 深色主题、自适应布局及局域网密码登录。
 
-> [!IMPORTANT]
-> 这是一个**非官方社区项目**，与 OpenAI 没有隶属、背书或维护关系。OpenAI、Codex 及相关标识归其各自权利人所有。
+## 安装
 
-Codex WebUI 直接连接 `codex app-server --stdio`，通过响应式浏览器界面提供本地 Codex 体验。模型列表、历史会话、流式回答、工具活动、审批请求、Diff 和 Token 使用量均来自真实 app-server，而不是前端静态模拟。
+需要 [Bun](https://bun.sh/) 1.3+、Node.js 20+、Git，以及已登录的 Codex CLI。推荐 Linux；Windows 尚未完整测试。当前验证的 Codex CLI 版本为 `0.162.1`。
 
-![Codex WebUI 桌面截图](./docs/assets/overview.png)
-
-## 主要功能
-
-- **对齐 Pi Web 的三栏工作台布局**：
-  - **左侧边栏（纯图标切换）**：支持 **会话列表**（固定项目分组与会话顺序、运行中旋转指示器、待审批/未读完成圆点）与 **项目文件树**（浏览目录、悬浮 `@` 一键引用文件、上传文件），并提供一键打开右侧 **终端** 按钮；采用手动开关与挤压自适应布局，展开时不遮挡中间对话
-  - **中间对话区与精简状态栏**：流式渲染回答与工具调用时间线、发送即时乐观反馈，底部常驻纯图标状态指示器、耗时计时器、精简 Token 摘要（`↑输入 ↓输出 · 上下文%`）及 `5h` / `Weekly` 剩余额度（点击可展开完整明细）
-  - **右侧面板**：由左侧文件树、终端按钮或 Diff Review 按需唤起，提供真实 **文件预览**（Markdown/代码/图片）、**PTY 终端**（`xterm.js` 256 色、尺寸同步、Vim/控制键支持）与 **Diff Review**（Unified / Split 视图、自动换行、Git Undo / Reapply）
-- **Skills 管理（v0.5.0）**：官方/个人技能分组、原生启用开关与快捷调用、个人 Markdown 编辑及离线精选缓存安装，详见下方 Skills 管理章节。
-- 通过 WebSocket（支持自动降级 SSE）桥接真实 `codex app-server --stdio`
-- 支持真实模型目录、推理强度、会话重命名（`thread/name/set`）、上下文压缩（`thread/compact/start`）、Markdown/JSON 导出及按会话草稿持久化
-- 对齐 Pi Web 的 `@` 文件引用自动补全（输入 `@` 立即列出当前项目文件与文件夹、支持 `@folder/` 逐级下钻、带空格路径自动加引号、支持粘贴/拖拽上传附件）
-- 命令、文件修改、网络和权限审批框（支持 **Allow once**、**Allow similar commands** 和会话级授权）
-- 设置面板精简为真实可用的 5 个页面（`通用`、`外观`、`配置`、`个人资料`、`键盘快捷键`），支持 **跟随系统 / 浅色 / 深色** 主题切换
-- 默认只监听 localhost；局域网访问需显式启用认证（`scrypt` 密码存储、`HttpOnly` 签名会话 Cookie 及按 IP 登录限流保护）
-
-## 环境要求
-
-- [Bun](https://bun.sh/) 1.3 或更高版本
-- Node.js 20 或更高版本，用于原生 PTY worker
-- 已安装并完成登录的 [OpenAI Codex CLI](https://www.npmjs.com/package/@openai/codex)
-- Git，用于 Review 的 Undo/Reapply
-- 推荐 macOS 或 Linux；Windows 尚未完整测试
-
-如未安装 Codex CLI：
+如果尚未安装和登录 Codex：
 
 ```bash
 npm install -g @openai/codex
-codex
+codex login
 ```
 
-请先完成 Codex 登录，再启动本项目。
-
-## 快速开始
+安装并启动 WebUI：
 
 ```bash
 git clone https://github.com/Shinyruooooo/codex-webui.git
@@ -67,200 +34,50 @@ bun install
 bun run start
 ```
 
-本机打开：
+打开 **http://127.0.0.1:8899**。此启动方式会自动构建前端，无需单独打包。
 
-```text
-http://127.0.0.1:8899
-```
+## 使用
 
-默认只监听 localhost。点击 Composer 或侧栏中的文件夹按钮，即可选择 Codex 的工作目录。
+1. 选择项目文件夹，新建或打开会话。
+2. 选择模型与推理强度后发送消息；执行命令或修改文件前，认真确认审批内容。
+3. 在文件页预览、上传文件，或在输入框输入 `@` 引用文件。
+4. 在 Skills 页查看和启用技能，通过 `/` 或 `$` 补全选择要调用的技能。
+5. 按需打开终端或 Diff 面板；会话操作菜单可重命名、导出或压缩上下文。
 
-### 局域网密码
+个人技能编辑、删除目前需要 Linux。精选技能安装依赖本机已有的 Codex 缓存，不会联网下载目录；外部技能源文件只读。
 
-未配置认证变量时，可以直接监听局域网：
+### 配置
 
-```bash
-HOST=0.0.0.0 bun run start
-```
-
-首个通过局域网访问的浏览器会看到密码设置页。确认至少 12 个字符的密码后，Codex WebUI 只把加盐后的 `scrypt` 凭据保存在 `~/.codex/codex-webui-auth.json`，并立即登录当前浏览器；服务重启后会显示普通登录页。由于第一个可访问该地址的局域网客户端拥有初始化权，请只在可信网络中完成首次设置。
-
-无人值守部署也可以在启动时直接指定密码：
-
-```bash
-HOST=0.0.0.0 CODEX_WEBUI_PASSWORD='use-a-long-random-password' bun run start
-```
-
-localhost 仍可直接访问。局域网客户端在设置或输入密码前，无法访问应用 Bundle、HTTP API 和 WebSocket bridge。认证成功后使用签名的 `HttpOnly`、`SameSite=Strict` 会话 Cookie。
-
-## 配置
-
-可复制示例配置：
-
-```bash
-cp .env.example .env
-```
-
-为了避免不同运行环境对 `.env` 加载方式的差异，推荐显式导出变量：
-
-```bash
-export HOST=0.0.0.0
-export PORT=8899
-export CODEX_WEBUI_ACCESS_TOKEN="$(openssl rand -hex 32)"
-export CODEX_WEBUI_CWD="$HOME/projects/my-project"
-export CODEX_WEBUI_REVIEW_ROOT="$HOME/projects/my-project"
-bun run start
-```
-
-| 变量 | 默认值 | 说明 |
+| 环境变量 | 默认值 | 用途 |
 | --- | --- | --- |
-| `HOST` | `127.0.0.1` | HTTP/WebSocket 监听地址 |
-| `PORT` | `8899` | HTTP/WebSocket 端口 |
-| `CODEX_WEBUI_PASSWORD` | 未设置 | 可选的局域网浏览器登录密码；设置后跳过首次初始化页 |
-| `CODEX_WEBUI_AUTH_STORE` | `$CODEX_HOME/codex-webui-auth.json` | 首次初始化生成的加盐密码凭据文件 |
-| `CODEX_WEBUI_ACCESS_TOKEN` | 未设置 | Basic/Bearer 客户端兼容密钥；未配置密码时也可用于浏览器登录，用户名为 `codex` |
-| `CODEX_WEBUI_CWD` | 仓库目录 | Codex 初始工作目录 |
-| `CODEX_WEBUI_REVIEW_ROOT` | 与 `CODEX_WEBUI_CWD` 相同 | 允许 Undo/Reapply 的精确 Git 根目录 |
-| `CODEX_HOME` | `~/.codex` | 包含 `auth.json` 的 Codex 状态目录 |
-| `CODEX_AUTH_PATH` | `$CODEX_HOME/auth.json` | 可选的 Codex 认证文件精确路径 |
-| `PLAYWRIGHT_EXECUTABLE_PATH` | 自动检测 | 浏览器测试可选的 Chrome/Edge 路径 |
+| `HOST` | `127.0.0.1` | 监听地址 |
+| `PORT` | `8899` | 监听端口 |
+| `CODEX_WEBUI_CWD` | 仓库目录 | 初始项目目录 |
+| `CODEX_WEBUI_REVIEW_ROOT` | 初始项目目录 | 允许 Diff 撤销 / 重做的 Git 根目录 |
+| `CODEX_WEBUI_PASSWORD` | 未设置 | 局域网浏览器登录密码 |
 
-## 安全模型
+例如，使用 `PORT=9000 bun run start` 修改端口。更多配置见 [.env.example](./.env.example)，使用前请将示例路径改为实际路径。
 
-Codex WebUI 可以在本机批准执行命令和修改文件，应把它视为拥有 Shell 能力的本地开发工具。
-
-- 不要把 `8899` 端口直接暴露到公网。
-- 默认只监听 `127.0.0.1`。监听非 localhost 地址时，必须先完成首次密码设置，或配置 `CODEX_WEBUI_PASSWORD` / `CODEX_WEBUI_ACCESS_TOKEN`，受保护的 HTTP 与 WebSocket 请求才会放行。
-- 浏览器 RPC 使用明确白名单，服务端统一校验 `cwd` 参数目录边界，且无法调用 app-server 的 `fs/*`、`config/*` 或账号方法。
-- 静态文件使用资源白名单（支持 `ETag` 与 gzip 压缩缓存重验），并拒绝所有符号链接。
-- 文件夹浏览、文件预览、下载、图片加载和上传均会 canonicalize 路径并通过 `O_NOFOLLOW` + inode/device 校验真实文件描述符，防止通过 symlink 或 TOCTOU 竞态逃逸允许的根目录。
-- `/api/auth/login` 接口内置按 IP 的失败次数限流与冷却机制，防止局域网密码暴力枚举。
-- Review Undo/Reapply 只使用服务端持有的 app-server Diff，拒绝客户端提交 `cwd`/Diff、符号链接补丁和 `.git`、`.env`、`node_modules` 等敏感目标。
-- 允许命令前认真阅读审批内容。
-- 账号身份由 app-server 的 `account/read` 与 Codex 已登录的 profile endpoint 聚合，仅允许本机 localhost 直接访问；LAN 客户端显示中性的 Settings fallback。邮箱和原始头像 URL 不会暴露，头像经同源白名单代理加载，`auth.json` token 始终只留在服务端。
-- 不要在 Issue、截图或公开日志中提交凭据。
-
-漏洞报告方式见 [SECURITY.md](./SECURITY.md)。
-
-## Skills 管理（v0.5.0）
-
-点击左侧「会话 / 文件」旁的 **Skills 技能图标**，或从 **设置 → 通用 → 管理技能** 进入。
-
-- **官方**：查看系统内置与已安装精选技能的说明，挂载到提示词，或通过 Codex 原生接口启用/停用。精选库从本机已有的 `openai/skills` 缓存复制完整目录（含资源与脚本），不执行安装脚本，不覆盖同名目录。
-- **个人**：在 `$CODEX_HOME/skills/<id>/SKILL.md` 新建、编辑、删除个人技能。项目、管理员、外部目录技能可查看与使用，但源文件只读。删除会移除整个个人技能目录，需要二次确认。
-- 输入 `/<skill-name>` 或 `$<skill-name>` 并选中补全项，或点击「使用」，会生成技能标签，发送时使用原生 `UserInput.skill`。同名技能保留各自路径身份，不静默合并。
-- 技能目录、有效启用状态来自 `skills/list` / `skills/config/write`；格式错误不会伪装为已启用技能。
-- 附加目录通过 `CODEX_WEBUI_SKILL_EXTRA_ROOTS=/path/to/skills,/other/skills` **显式选择**。不会自动扫描/导入 Pi 或 DSH 技能；显式挂载的源文件只读。启用/停用仅写 Codex 配置，不写入技能源目录。
-
-官方精选库需要本机已存在 `$CODEX_HOME/vendor_imports/skills`（含 `openai/skills` 来源信息）与 `skills-curated-cache.json`。缓存缺失不影响系统/个人技能管理；此版本不联网下载目录。来源信息只是**本地来源提示，不是签名验证或安全审计**，使用前需自行检查第三方说明和脚本。已安装精选技能的字节内容被修改后不再标记为原缓存的官方技能。
-
-技能管理面向可信单用户主机及已认证 LAN 客户端，不提供多租户隔离。在无法用文件描述符安全锚定目录写入的平台上拒绝文件变更，不回退到不安全的路径写入。此管理器不允许修改 `~/.pi` 下的技能源文件。
-
-后续开发仅提交 `dev`；只有明确批准正式版本后才更新 `main` 和发布标签。版本历史见 [CHANGELOG.md](./CHANGELOG.md)，本次发布说明见 [RELEASE_REPORT.md](./RELEASE_REPORT.md)。
-
-## Review 与审批
-
-WebUI 处理真实 app-server 请求，而不是只画一个假的审批卡：
-
-- `item/commandExecution/requestApproval`
-- `item/fileChange/requestApproval`
-- `item/permissions/requestApproval`
-
-Review 数据来自 `turn/diff/updated`。聚合 Unified Diff 会被解析为文件和 Hunk，并支持：
-
-- Unified / Split 切换
-- Word wrap
-- 全部展开/收起
-- Git Undo（`git apply --reverse`）
-- Git Reapply（`git apply`）
-
-Undo/Reapply 被严格限制在配置的仓库根目录中。
-
-界面按 Codex Desktop 结构拆分为独立的 Bottom Panel、Summary 和 Task Side Panel。Bottom Panel 提供受现有认证保护的真实本地 PTY 终端，app-server 桥接则提供 Review 流程和受限的本地项目选择；Task Side Panel 中仅原生 Desktop 支持的 Terminal、内嵌 Browser 和 Side task 入口仍保留结构一致性，但会明确提示不可用，不会伪造对应功能。
-
-## 架构
-
-```mermaid
-flowchart LR
-    Browser[浏览器 UI] <-->|WebSocket JSON-RPC| Server[Bun HTTP + WS 服务]
-    Server <-->|stdio JSON-RPC| Codex[codex app-server]
-    Browser <-->|受认证保护的终端 WebSocket| PTY[Node PTY worker]
-    PTY <-->|xterm-256color| Shell[本地登录 Shell]
-    Browser -->|目录 API| Server
-    Browser -->|Review Patch API| Server
-    Server -->|git apply / reverse| Repo[本地 Git 仓库]
-```
-
-主要文件：
-
-| 路径 | 职责 |
-| --- | --- |
-| `server.ts` | HTTP、WebSocket、app-server 进程、目录/配置/文件/Review API |
-| `server/` | 后端服务模块：安全鉴权、文件树/预览/上传、CLI rollout 实时解析、PTY 终端、Git Review 补丁 |
-| `public/` | 浏览器前端模块（`app.js`、`usage.js`、`session-tools.js`、`theme.js`、`codex-surfaces.js`、`rendering.js`、`style.css`） |
-| `tests/` | 单元、集成、浏览器、移动端和真实审批测试 |
-
-`public/app.bundle.js` 会在服务启动时自动生成，不提交到 Git。
-
-开发时使用 `bun run dev` 会同时监听 `server.ts` 和以 `public/app.js` 为入口的浏览器依赖图。后端变化会重启服务，前端变化会重建 `public/app.bundle.js`；刷新网页即可加载新 Bundle。
-
-生成可直接运行的浏览器 Bundle 和 `dist/server.js`：
+### 局域网访问
 
 ```bash
-bun run build
-bun dist/server.js
+HOST=0.0.0.0 CODEX_WEBUI_PASSWORD='replace-with-a-long-random-password' bun run start
 ```
 
-## 测试
+通过 `http://<服务器IP>:8899` 访问并输入密码。本机 localhost 访问不显示登录页。仅在可信网络中使用，不要直接暴露到公网。
 
-如果本机没有兼容的 Chrome/Edge，可安装 Playwright Chromium：
+重启服务前请先结束正在运行的会话，避免中断其 app-server 任务。
 
-```bash
-bunx playwright install chromium
-```
+开发模式使用 `bun run dev`。测试与贡献说明见 [CONTRIBUTING.md](./CONTRIBUTING.md)，安全说明见 [SECURITY.md](./SECURITY.md)。
 
-运行可移植单元测试：
+## 致谢
 
-```bash
-bun run test:unit
-```
-
-检查后端和浏览器 Bundle：
-
-```bash
-bun run check
-```
-
-服务运行时执行浏览器测试：
-
-```bash
-bun run test:browser
-```
-
-以下测试需要可用且已登录的 Codex：
-
-```bash
-bun run test:integration
-bun run test:e2e
-```
-
-真实审批 E2E 会让 Codex 请求执行一条无害命令，等待真实审批框，点击 **Allow once**，验证执行结果并清理临时文件。
-
-## Codex 视觉资源
-
-为了复刻 Codex Desktop 体验，仓库当前包含从本地 Codex.app 安装中提取的品牌和动画资源。来源和状态记录在 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) 中。这些资源不属于仓库 MIT License 的授权范围；如果相关权利人提出要求，将移除或替换。
-
-## 已知限制
-
-- Codex app-server 协议仍在演进，不同 CLI 版本之间可能出现变化。
-- 浏览器测试需要兼容的 Chromium 浏览器。
-- Undo/Reapply 当前作用于完整聚合 Diff，尚不支持逐 Hunk 操作。
-- 项目有意不提供公网部署认证系统。
-
-## 参与贡献
-
-提交 PR 前请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。Bug 和功能建议请使用仓库中的 Issue 模板。
+- [lezi-fun/codex-webui](https://github.com/lezi-fun/codex-webui)：本项目基于其代码继续开发。
+- [agegr/pi-web](https://github.com/agegr/pi-web)：工作台布局与交互参考。
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)：Skills 界面设计参考。
 
 ## 许可证
 
-项目源码采用 [MIT License](./LICENSE)。第三方组件和可选本地资源适用各自许可证与条款，详见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
+项目源码采用 [MIT License](./LICENSE)，保留上游版权声明。第三方组件及视觉资源保留各自的许可证与权利，详见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
+
+本项目由社区独立维护，并非 OpenAI 官方产品。

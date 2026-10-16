@@ -1,20 +1,18 @@
 # Third-party notices
 
-## Upstream base project (`lezi-fun/codex-webui`)
+Codex PiWeb UI source code is licensed under [MIT](./LICENSE). This license does not replace third-party licenses or grant rights to third-party trademarks and visual assets.
 
-This repository (**Codex PiWeb UI**) is a secondary development (derivative work) based on [`lezi-fun/codex-webui`](https://github.com/lezi-fun/codex-webui), originally licensed under the MIT License (`Copyright (c) 2026 lezi-fun`). The original copyright and permission notice are preserved in [`LICENSE`](./LICENSE).
+## Upstream and acknowledgments
 
-## Interface and interaction design inspiration (`agegr/pi-web`)
+- **[lezi-fun/codex-webui](https://github.com/lezi-fun/codex-webui)** — upstream codebase, MIT, Copyright (c) 2026 lezi-fun. Its copyright and full permission notice are preserved in `LICENSE`.
+- **[agegr/pi-web](https://github.com/agegr/pi-web)** — workspace layout and interaction inspiration (MIT).
+- **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`@deepseek-ai/dsh`)** — Skills interface inspiration, MIT, Copyright (c) 2026 DeepSeek. DSH packages are not bundled with this project.
 
-The three-column workspace layout (left sidebar icon switcher for Chats / Files, center conversation dock with persistent runtime status & token usage bar, and right panel for file preview / PTY terminal / diff review) and core workspace ergonomics are inspired by [`@agegr/pi-web`](https://github.com/agegr/pi-web) (MIT License). No `@agegr/pi-web` source files are bundled in this repository.
+Skills installed from a user's Codex cache are not included in this repository and retain their original licenses. Other package dependencies retain the licenses distributed with those packages.
 
-## Skills interaction inspiration (`@deepseek-ai/dsh`)
+## Lucide icons
 
-The Skills cards, instruction inspection, and slash-selection interaction are inspired by the locally inspected DeepSeek Harness (`@deepseek-ai/dsh`, MIT, Copyright (c) 2026 DeepSeek). This project implements its own vanilla JavaScript UI and Codex app-server integration; no DSH packages or bundles are shipped. Curated skill bundles remain in the user's Codex cache and retain their own licenses when explicitly installed; they are not included in this repository.
-
-## Lucide
-
-The interface icons in `public/codex-icons.js` use the exact Lucide icon path data bundled with the locally installed Codex.app (`lucide-react` 0.456.0).
+`public/codex-icons.js` includes Lucide icon path data from `lucide-react` 0.456.0, originally obtained from a local Codex.app installation. The following notice is preserved:
 
 ISC License
 
@@ -24,10 +22,8 @@ Permission to use, copy, modify, and/or distribute this software for any purpose
 
 THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-Source verification: `/Applications/Codex.app/Contents/Resources/THIRD_PARTY_NOTICES.txt`, entry `lucide-react (0.456.0)`.
+## Existing Codex visual assets
 
-## Codex.app visual assets
+`public/codex-brand.js`, `public/assets/codex-app-icon*.png`, and `public/assets/codex-motion/*.json` contain brand or motion assets originally obtained from a local Codex.app installation. These assets are not covered by this project's MIT license; rights remain with their respective owners. This notice does not grant permission to redistribute them.
 
-`public/codex-brand.js` retains the monochrome Knot path extracted from the installed Codex.app wordmark, while `public/assets/codex-app-icon*.png` and `public/assets/codex-motion/*.json` were extracted from the same local application to reproduce its brand and tool-motion presentation. These assets are distributed separately from the MIT-licensed source code and remain subject to the rights and terms of their respective owner. They may be removed or replaced if requested by the relevant rights holder.
-
-OpenAI, Codex, and related marks are trademarks of their respective owners. This project is not affiliated with or endorsed by OpenAI.
+OpenAI, Codex, and related marks belong to their respective owners. This is an independent community project, not affiliated with or endorsed by OpenAI.

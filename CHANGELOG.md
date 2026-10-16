@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-16
+
 ### Added
 - DSH-inspired Skills sidebar with Official / Personal groups, search, read-only instruction inspector, and native Codex enable/disable controls.
 - Personal skill creation, Markdown editing, and confirmed deletion under `$CODEX_HOME/skills/<id>` only; system/project/external skill files are read-only.

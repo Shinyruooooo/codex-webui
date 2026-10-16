@@ -33,6 +33,7 @@ Codex WebUI connects directly to `codex app-server --stdio` and exposes the loca
   - **Left Sidebar**: Icon-only switcher between **Sessions** (stable project grouping + live running spinner / approval & unread completion dots) and **Files** (project file tree, hover `@` mention, upload), plus a one-click **Terminal** trigger; manual toggle with adaptive push layout that never covers conversations
   - **Center Conversation**: Real streaming turns, tool activity timeline, immediate optimistic submit feedback, and a compact runtime footer (icon-only status indicator, elapsed timer, compact `↑in ↓out · ctx%` token summary, and `5h` / `Weekly` remaining quota with expandable details)
   - **Right Side Panel**: Invoked directly from left-side actions or review triggers for **File preview** (Markdown/code/image), **PTY Terminal** (`xterm.js` 256-color + resize + Vim/control keys), and **Diff Review** (Unified/Split diff, word wrap, Git Undo/Reapply)
+- **Skills management (v0.5.0):** Official / Personal catalogs, native enable switches and prompt invocation, personal Markdown editing, and offline curated-cache installation; see [Skills management](#skills-management-v050).
 - Real `codex app-server --stdio` bridge over WebSocket with automatic SSE fallback
 - Real model catalog, reasoning effort options, thread rename (`thread/name/set`), context compaction (`thread/compact/start`), Markdown/JSON export, and per-session draft persistence
 - Pi Web-aligned `@` file mention autocomplete (immediate file/folder list on `@`, folder trailing-slash drilldown `@folder/`, quoted paths with spaces, paste/drag/upload attachments)
@@ -143,7 +144,7 @@ Codex WebUI can approve command execution and file changes on your machine. Trea
 
 See [SECURITY.md](./SECURITY.md) for the reporting policy.
 
-## Skills management (development branch)
+## Skills management (v0.5.0)
 
 Use the **Skills** icon beside Chats / Files, or **Settings → General → Manage skills**.
 
@@ -157,7 +158,7 @@ The curated catalog requires an already populated `$CODEX_HOME/vendor_imports/sk
 
 Skills management is intended for a trusted, single-user host and authenticated LAN clients, not tenant isolation. On platforms without a supported descriptor-anchored mutation path, file mutations are refused rather than falling back to unsafe pathname writes. Skill source files under `~/.pi` are never writable through this manager.
 
-Development goes to `dev`; `main` and release tags change only at an explicitly approved release. See [CHANGELOG.md](./CHANGELOG.md) for unreleased changes.
+Development goes to `dev`; `main` and release tags change only at an explicitly approved release. See [CHANGELOG.md](./CHANGELOG.md) for version history and [RELEASE_REPORT.md](./RELEASE_REPORT.md) for the current release notes.
 
 ## Review and approvals
 

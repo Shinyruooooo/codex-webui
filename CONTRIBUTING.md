@@ -25,13 +25,21 @@ Requirements:
 - Chrome, Edge, or Playwright Chromium for browser tests
 
 ```bash
-git clone https://github.com/lezi-fun/codex-webui.git
+git clone https://github.com/Shinyruooooo/codex-webui.git
 cd codex-webui
+git switch dev
 bun install
 bun run dev
 ```
 
 Open `http://127.0.0.1:8899`. Use `bun run start` when file watching is not needed.
+
+## Branches and releases
+
+- Send routine fixes and new features to `dev`, and record user-visible changes under `CHANGELOG.md` → Unreleased.
+- `main` tracks approved stable releases. Do not move it for daily development; merge `dev` only when a release is explicitly approved.
+- For a release, update `package.json`, `server.ts`'s `APP_VERSION`, the Changelog and `RELEASE_REPORT.md`; run the release checks before merging and create a new annotated `vX.Y.Z` tag. Never overwrite an existing published tag.
+- Check for active Codex turns before restarting a managed service. Publishing Git branches or a tag does not itself require a service restart.
 
 ## Project conventions
 

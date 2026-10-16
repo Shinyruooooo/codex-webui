@@ -598,10 +598,6 @@ function renderSkillsList(){
       installBtn.onclick=event=>{event.stopPropagation();void installCuratedSkill(skill)};
       actions.append(installBtn);
     }else{
-      const useBtn=document.createElement('button');
-      useBtn.type='button';useBtn.className='skills-mini-btn primary';
-      useBtn.textContent=t('Use');useBtn.disabled=skill.enabled===false;
-      useBtn.onclick=event=>{event.stopPropagation();attachSkillToComposer(skill)};
       const toggle=document.createElement('button');
       toggle.type='button';toggle.className='skills-switch';toggle.role='switch';
       toggle.disabled=skillMutations.has(skill.path);
@@ -609,7 +605,7 @@ function renderSkillsList(){
       toggle.title=skill.enabled!==false?t('Skill enabled'):t('Skill disabled');
       toggle.setAttribute('aria-label',`${skillDisplayTitle(skill)} ${skill.enabled!==false?'enabled':'disabled'}`);
       toggle.onclick=event=>{event.stopPropagation();void toggleSkillEnabled(skill,skill.enabled===false)};
-      actions.append(useBtn,toggle);
+      actions.append(toggle);
     }
     card.onclick=()=>void inspectSkillItem(skill,{curated});
     card.onkeydown=event=>{if(event.target===card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();void inspectSkillItem(skill,{curated})}};

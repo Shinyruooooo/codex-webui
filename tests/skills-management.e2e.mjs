@@ -93,9 +93,11 @@ try {
 
  // Enable/disable is persisted by Codex, and survives refresh. Disabled skill cannot be used.
  const personalCard=page.locator('.skills-card[data-skill-name="e2e-personal"]');
+ assert.equal(await personalCard.locator('.skills-card-actions button').count(),1,'Installed skill cards should only show the enable switch');
+ assert.equal(await personalCard.locator('.skills-mini-btn').count(),0);
  await personalCard.locator('.skills-switch').click();
  await page.waitForFunction(()=>document.querySelector('.skills-card[data-skill-name="e2e-personal"] .skills-switch')?.getAttribute('aria-checked')==='false');
- assert.equal(await personalCard.locator('.skills-mini-btn').isDisabled(),true);
+ assert.equal(await page.locator('#skillInspectorUseButton').isDisabled(),true);
  await page.click('#skillsRefreshButton');
  await page.waitForFunction(()=>document.querySelector('.skills-card[data-skill-name="e2e-personal"] .skills-switch')?.getAttribute('aria-checked')==='false');
  await personalCard.locator('.skills-switch').click();

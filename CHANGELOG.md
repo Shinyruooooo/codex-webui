@@ -16,6 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Opt-in extra skill roots through `CODEX_WEBUI_SKILL_EXTRA_ROOTS`; no implicit import or modification of Pi skills.
 - Disposable-HOME integration coverage for real native skill discovery/configuration and browser management workflows without model inference.
 
+### Fixed
+- Long chat titles stay on one ellipsized line within the 46px header, including iPad split-window widths. Title styling now targets `#threadTitle` instead of a structural first-child selector that stopped matching after the sidebar toggle moved into the heading. Project paths shrink within a bounded width and header controls remain accessible.
+
 ## [0.4.0] - 2026-10-15
 
 ### Added

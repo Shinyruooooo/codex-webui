@@ -7,12 +7,11 @@ const errors=[];page.on('pageerror',error=>errors.push(error.message));
 await page.goto(process.env.CODEX_WEBUI_TEST_URL||'http://127.0.0.1:8899',{waitUntil:'networkidle'});
 
 const selectedProject=await page.evaluate(()=>({
-  trigger:document.querySelector('#composerProjectButton')?.textContent?.trim(),
-  triggerHidden:document.querySelector('#composerProjectButton')?.hidden,
+  projectButton:document.querySelector('#projectButton')?.textContent?.trim(),
   sidebar:document.querySelector('#projectName')?.textContent?.trim(),
   heading:document.querySelector('#emptyState h1')?.textContent?.trim(),
 }));
-await page.click('#composerProjectButton');
+await page.click('#projectButton');
 await page.waitForSelector('#folderDialog[open]');
 await page.screenshot({path:artifact('composer-project-picker.png'),fullPage:false});
 const picker=await page.evaluate(()=>({
@@ -35,17 +34,16 @@ const projectless=await page.evaluate(()=>({
   sidebar:document.querySelector('#projectName')?.textContent?.trim(),
   path:document.querySelector('#projectPath')?.textContent?.trim(),
   threadPath:document.querySelector('#threadPath')?.textContent?.trim(),
-  trigger:document.querySelector('#composerProjectButton')?.textContent?.replace(/\s+/g,' ').trim(),
+  projectButton:document.querySelector('#projectButton')?.textContent?.replace(/\s+/g,' ').trim(),
   dialogOpen:document.querySelector('#folderDialog')?.open,
   mentionMessage:document.querySelector('#composerAutocomplete')?.textContent?.trim(),
 }));
 await page.evaluate(()=>{const api=globalThis.__codexWebuiDebug;api.state.active={id:'existing',name:'Existing task',cwd:`${api.state.config.home}/projects/codex-webui`,source:'local'};api.renderHeader()});
-const existing=await page.evaluate(()=>({triggerHidden:document.querySelector('#composerProjectButton')?.hidden,placeholder:document.querySelector('#prompt')?.placeholder}));
+const existing=await page.evaluate(()=>({projectButton:document.querySelector('#projectButton')?.textContent?.trim(),placeholder:document.querySelector('#prompt')?.placeholder}));
 console.log(JSON.stringify({selectedProject,picker,chooseProjectAction,projectPickerReopened,projectless,existing,errors},null,2));
 await browser.close();
 
-if(selectedProject.triggerHidden
-  ||!selectedProject.trigger?.includes(selectedProject.sidebar)
+if(!selectedProject.projectButton?.includes('Projects')
   ||!selectedProject.heading?.includes(selectedProject.sidebar)
   ||picker.title!=='Project'
   ||!picker.projectless?.includes('None')||!picker.projectless?.includes("Don't work in a project")
@@ -53,10 +51,10 @@ if(selectedProject.triggerHidden
   ||projectless.sidebar!=='Tasks'
   ||projectless.path!=='~'
   ||projectless.threadPath!==''
-  ||!projectless.trigger?.includes('Tasks')
+  ||!projectless.projectButton?.includes('Projects')
   ||projectless.dialogOpen
   ||!chooseProjectAction.exists||!chooseProjectAction.text?.includes('Choose project')
   ||!projectPickerReopened
-  ||!existing.triggerHidden
+  ||!existing.projectButton?.includes('Projects')
   ||existing.placeholder!=='Ask for follow-up changes'
   ||errors.length)process.exit(1);

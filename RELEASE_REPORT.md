@@ -1,13 +1,26 @@
-# Codex PiWeb UI v0.5.0 — Release Report
+# Codex PiWeb UI v0.5.1 — Release Report
 
-- **Version:** `0.5.0`
-- **Date:** 2026-10-16
-- **Base release:** `v0.4.0`
+- **Version:** `0.5.1`
+- **Date:** 2026-10-17
+- **Base release:** `v0.5.0`
 - **Repository:** https://github.com/Shinyruooooo/codex-webui
 - **Stable branch:** `main`; ongoing development remains on `dev`.
-- **Release tag:** `v0.5.0`. Previous release tags are not moved or overwritten.
+- **Release tag:** `v0.5.1`. Previous release tags are not moved or overwritten.
 
 ## Highlights / 本次更新
+
+### Workspace browsing — 工作区文件浏览
+
+- The left Files sidebar now requests and displays hidden workspace files and folders, including `.env` and `.gitignore`.
+- Added browser coverage for hidden file entries while keeping `.git` excluded by the existing repository safety rule.
+
+### Runtime quota interaction — 额度详情交互
+
+- The quota details popover closes on the next click anywhere on the page, including clicking its original summary position.
+
+### Skill bundle permissions — 技能包权限
+
+- Curated skill installations preserve executable bits under the server's restrictive `umask` without widening other file permissions.
 
 ### Skills management — 官方与个人技能管理
 
@@ -42,13 +55,13 @@ The following checks were executed for this release:
 | `bun run test:unit` | **149 passed, 0 failed**, across 25 files |
 | `bun run check` | Passed: server, development entry and browser bundle compile |
 | `bun run build` | Passed: browser bundle and `dist/server.js` generated |
-| `bun run test:browser` | **33 browser scripts passed**, including header and Skills regressions |
-| Version consistency | `package.json`, app-server client info and `/api/health` use `0.5.0` |
+| `bun run test:browser` | Not run: the current environment has no Playwright Chromium executable |
+| Version consistency | `package.json`, app-server client info and `/api/health` use `0.5.1` |
 | `git diff --check` | Passed |
 
-Skills E2E uses a disposable `HOME` / `CODEX_HOME` and the real local Codex skills discovery/configuration APIs. Only conversation/model responses are mocked; no paid model inference is performed. It covers create/edit/delete, persistent enablement, read-only external skills, offline curated installation, native skill input, and tablet focus restoration. Unit fixtures also cover invalid YAML, symlinks, hard links, directory replacement, binary resources and executable permissions.
+The Skills E2E suite uses a disposable `HOME` / `CODEX_HOME` and the real local Codex skills discovery/configuration APIs. Only conversation/model responses are mocked; no paid model inference is performed. It covers create/edit/delete, persistent enablement, read-only external skills, offline curated installation, native skill input, and tablet focus restoration. Unit fixtures cover invalid YAML, symlinks, hard links, directory replacement, binary resources and executable permissions.
 
-**Not verified in this release run:** authenticated real-model inference (`test:integration`), Apple Safari/WebKit execution, and Skills file mutations on non-Linux systems. Responsive browser regressions ran in Chromium; they do not constitute native iPad Safari certification.
+**Not verified in this release run:** browser E2E because the Playwright Chromium executable is unavailable, authenticated real-model inference (`test:integration`), Apple Safari/WebKit execution, and Skills file mutations on non-Linux systems. Browser checks do not constitute native iPad Safari certification.
 
 ## Upgrade notes / 升级注意事项
 

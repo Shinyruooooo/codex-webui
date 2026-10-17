@@ -8,8 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-17
+
 ### Changed
+- Runtime quota details now close on the next click anywhere on the page.
+- The left Files sidebar now shows hidden workspace files and folders such as `.env` and `.gitignore`.
 - Simplified both READMEs around features, installation and usage, removed screenshots and image badges, and shortened acknowledgments while preserving upstream and third-party license notices.
+
+### Fixed
+- Curated skill bundles preserve executable bits when installed under the server's restrictive `umask`, while other file permissions remain protected.
+- Added browser coverage for hidden workspace file entries.
 
 ## [0.5.0] - 2026-10-16
 

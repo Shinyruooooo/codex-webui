@@ -39,6 +39,7 @@ const workspaceDir = join(process.env.HOME || root, `.codex-webui-workspace-test
 mkdirSync(join(workspaceDir, 'docs'), { recursive: true });
 writeFileSync(join(workspaceDir, 'README.md'), '# Project Guide\n\nHello from workspace preview.\n');
 writeFileSync(join(workspaceDir, 'docs', 'notes.txt'), 'line one\nline two\n');
+writeFileSync(join(workspaceDir, '.env.local'), 'HIDDEN_TEST=1\n');
 
 const port = await freePort();
 const base = `http://127.0.0.1:${port}`;
@@ -244,6 +245,7 @@ try {
   // and typing @ in composer immediately lists project files & supports folder drilldown.
   await page.click('#sidebarTabFiles');
   await page.waitForSelector('#sidebarFilesSection:not([hidden]) [data-file-entry-path="README.md"]');
+  await page.waitForSelector('#sidebarFilesSection:not([hidden]) [data-file-entry-path=".env.local"]');
   await page.click('[data-file-entry-path="README.md"]');
   await page.waitForSelector('#sidePanel:not([hidden]) #filesPanel:not([hidden])');
   assert.ok((await page.locator('#filesPreviewBody').textContent()).includes('Hello from workspace preview.'));

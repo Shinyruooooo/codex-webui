@@ -1,6 +1,6 @@
 import {
   closeSync, constants as fsConstants, existsSync, fstatSync, lstatSync, mkdirSync,
-  openSync, readSync, readdirSync, realpathSync, renameSync, rmdirSync,
+  fchmodSync, openSync, readSync, readdirSync, realpathSync, renameSync, rmdirSync,
   writeSync, unlinkSync,
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -314,12 +314,16 @@ export function readSkillFile(targetPath, { codexHome, homeDir, browseRoots = []
   } finally { closeSync(parentFd); }
 }
 
-function writeExclusive(path, content, mode = 0o644) {
+function writeExclusive(path, content, mode = 0o644, { preserveExecuteBits = false } = {}) {
   const fd = openSync(path, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | (fsConstants.O_NOFOLLOW || 0), mode);
   try {
     const bytes = Buffer.isBuffer(content) ? content : Buffer.from(content, "utf8");
     let offset = 0;
     while (offset < bytes.length) offset += writeSync(fd, bytes, offset, bytes.length - offset);
+    if (preserveExecuteBits) {
+      const currentMode = fstatSync(fd).mode & 0o777;
+      fchmodSync(fd, (currentMode & ~0o111) | (mode & 0o111));
+    }
   } finally {
     closeSync(fd);
   }
@@ -505,7 +509,7 @@ function copyBundle(sourceFd, targetFd) {
         const read = readRegularFileAt(srcFd, name, { maxBytes: MAX_BUNDLE_FILE_BYTES, rejectHardlinks: true });
         totalBytes += read.bytes.length;
         if (totalBytes > MAX_BUNDLE_BYTES) throw new Error("Curated skill bundle exceeds limits");
-        writeExclusive(fdPath(dstFd, name), read.bytes, 0o644 | (stat.mode & 0o111));
+        writeExclusive(fdPath(dstFd, name), read.bytes, 0o644 | (stat.mode & 0o111), { preserveExecuteBits: true });
       } else throw new Error(`Bundle contains a special file: ${name}`);
     }
   };

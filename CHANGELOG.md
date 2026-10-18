@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- The right-side panel can be resized by dragging its left edge or using separator keyboard controls; browser-local width preferences survive reloads, double-click restores the default, and viewport limits keep the chat usable. Terminal rows/columns follow panel resizing without replacing the shell.
+- Terminal connection/output-waiting status, an explicitly confirmed reconnect action, and a copyable diagnostics dialog containing only transport/rendering metadata—not commands, terminal output or credentials. Added authenticated Chromium/WebKit coverage for terminal input, reconnect, diagnostics privacy and resizing at desktop, split-window and mobile widths.
+
+### Fixed
+- Reopening an already-connected terminal on narrow/overlay layouts now keeps keyboard focus in the terminal instead of moving it to the panel close button. Added real-PTY first-open/reopen command-input coverage at desktop, split-window and mobile widths.
+
 ### Changed
 - The release workflow supports manually publishing an existing version tag when its original push event has no run; it verifies the exact tagged source and notes without moving the tag.
 

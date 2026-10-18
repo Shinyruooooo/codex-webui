@@ -255,7 +255,7 @@ body{background:var(--app-main);color:var(--app-text)}
 .utility-button,.select-button{background:transparent;color:var(--app-text-secondary)}
 .utility-button:hover,.select-button:hover{background:var(--app-hover);color:var(--app-text)}
 .composer-caption{color:var(--app-text-secondary)}
-.approval-card{background:var(--app-input);color:var(--app-text);box-shadow:var(--app-elevation-shadow)}
+.approval-card{position:relative;z-index:2;overflow:visible;background:var(--app-input);color:var(--app-text);box-shadow:var(--app-elevation-shadow)}
 .approval-actions .approval-deny:hover:not(:disabled),.approval-actions .approval-leading:hover:not(:disabled),.approval-actions .approval-menu-toggle:hover:not(:disabled){background:var(--app-hover);color:var(--app-text)}
 .approval-command code{display:block;max-height:8lh;overflow:auto;background:color-mix(in srgb,var(--app-text) 6%,var(--app-main));color:var(--app-text);-webkit-line-clamp:unset}
 .approval-menu,.model-menu{border-color:var(--app-border-default);background:var(--app-panel);color:var(--app-text);box-shadow:var(--app-elevation-shadow)}
@@ -508,7 +508,7 @@ body.sidebar-hidden .sidebar{box-shadow:none!important}
 .send-button[data-submit-mode=stop] .icon-slot>svg{width:18px;height:18px}
 @media(max-width:720px){
   .composer textarea{min-height:62px}
-  .composer-footer{overflow:hidden}
+  .composer-footer{overflow:visible}
   .model-trigger{width:auto;max-width:150px}
   .model-trigger>span:first-child{display:inline-block}
   .model-trigger #modelLabel{max-width:78px}

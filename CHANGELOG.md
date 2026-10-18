@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-18
+
+### Added
+- Conversation settings are now stored per conversation, so model, reasoning effort and permission mode are restored independently when switching sessions.
+- Conversation history opens with the newest turn and loads older turns automatically as the user scrolls upward.
+
+### Changed
+- Conversation loading now requests lightweight thread metadata before fetching the visible turn page, reducing initial history payloads for long sessions.
+- Removed the review panel from the application surface.
+
+### Fixed
+- Approval cards can expand beyond the composer boundary on narrow screens, so authorization actions remain fully visible.
+
 ## [0.5.1] - 2026-10-17
 
 ### Changed

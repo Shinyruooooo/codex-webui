@@ -255,7 +255,7 @@ body{background:var(--app-main);color:var(--app-text)}
 .utility-button,.select-button{background:transparent;color:var(--app-text-secondary)}
 .utility-button:hover,.select-button:hover{background:var(--app-hover);color:var(--app-text)}
 .composer-caption{color:var(--app-text-secondary)}
-.approval-card{background:var(--app-input);color:var(--app-text);box-shadow:var(--app-elevation-shadow)}
+.approval-card{position:relative;z-index:2;overflow:visible;background:var(--app-input);color:var(--app-text);box-shadow:var(--app-elevation-shadow)}
 .approval-actions .approval-deny:hover:not(:disabled),.approval-actions .approval-leading:hover:not(:disabled),.approval-actions .approval-menu-toggle:hover:not(:disabled){background:var(--app-hover);color:var(--app-text)}
 .approval-command code{display:block;max-height:8lh;overflow:auto;background:color-mix(in srgb,var(--app-text) 6%,var(--app-main));color:var(--app-text);-webkit-line-clamp:unset}
 .approval-menu,.model-menu{border-color:var(--app-border-default);background:var(--app-panel);color:var(--app-text);box-shadow:var(--app-elevation-shadow)}
@@ -439,9 +439,6 @@ body.sidebar-hidden .sidebar{box-shadow:none!important}
 .composer-text-button .icon-slot{width:15px;height:15px;min-width:15px}
 .composer-text-button .icon-slot>svg{width:14px;height:14px}
 .approval-control{padding-left:6px}
-.composer-project-control{max-width:190px;padding:0 5px}
-.composer-project-control[hidden]{display:none}
-.composer-project-control #composerProjectLabel{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--app-text-secondary)}
 .composer-model-control{min-width:0}
 .model-trigger{min-width:0;max-width:230px;padding:0 5px;gap:6px;border:0;background:transparent;font-size:13px}
 .model-trigger:hover,.model-trigger[aria-expanded=true]{background:color-mix(in srgb,var(--app-text) 4%,transparent);color:var(--app-text-secondary)}
@@ -511,9 +508,7 @@ body.sidebar-hidden .sidebar{box-shadow:none!important}
 .send-button[data-submit-mode=stop] .icon-slot>svg{width:18px;height:18px}
 @media(max-width:720px){
   .composer textarea{min-height:62px}
-  .composer-footer{overflow:hidden}
-  .composer-project-control{max-width:128px}
-  .composer-project-control #composerProjectLabel{max-width:74px}
+  .composer-footer{overflow:visible}
   .model-trigger{width:auto;max-width:150px}
   .model-trigger>span:first-child{display:inline-block}
   .model-trigger #modelLabel{max-width:78px}
@@ -528,9 +523,6 @@ body.sidebar-hidden .sidebar{box-shadow:none!important}
   .composer-dock{padding-top:4px}
   .approval-control .control-label{display:none}
   .approval-control{width:28px;padding:0;justify-content:center}
-  .composer-project-control{max-width:88px}
-  .composer-project-control>.icon-slot:first-child{display:none}
-  .composer-project-control #composerProjectLabel{max-width:54px}
   .model-trigger{max-width:118px;padding-inline:5px}
   .model-trigger #modelLabel{max-width:54px}
   .composer-left{min-width:0;flex:1}

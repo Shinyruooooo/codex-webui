@@ -142,7 +142,6 @@
         <div class="composer-footer">
           <div class="composer-left">
             <button type="button" class="composer-circle-button add-control" data-composer-control="add" title="Attach files and folders" aria-label="Attach files and folders"><span class="icon-slot" data-icon="plus"></span></button>
-            <button type="button" class="composer-text-button composer-project-control" id="composerProjectButton" data-composer-control="project" aria-label="Project"><span class="icon-slot" data-icon="folderOpen"></span><span id="composerProjectLabel">codex-webui</span><span class="icon-slot chevron" data-icon="chevronDown"></span></button>
             <div class="permission-picker" id="permissionPicker" data-composer-control="approval">
               <button type="button" class="composer-text-button approval-control" id="modeButton" title="Change permissions" aria-haspopup="menu" aria-expanded="false"><span class="icon-slot" data-icon="shield"></span><span class="control-label">Ask for approval</span><span class="icon-slot chevron" data-icon="chevronDown"></span></button>
               <div class="permission-menu" id="permissionMenu" role="menu" aria-label="How should Codex actions be approved?" hidden>
@@ -180,7 +179,6 @@
     <div class="side-panel-toolbar">
       <div class="side-panel-tabs" role="tablist" aria-label="Task side panel">
         <button class="side-panel-tab" id="newTab" type="button" role="tab" aria-selected="false" data-side-panel-tab="launcher" hidden>New tab</button>
-        <button class="side-panel-tab" id="reviewTab" type="button" role="tab" aria-selected="false" data-side-panel-tab="review" hidden>Review <span id="changeCount">0</span></button>
         <button class="side-panel-tab" id="utilityTab" type="button" role="tab" aria-selected="false" data-side-panel-tab="utility" hidden></button>
       </div>
       <div class="side-panel-tools">
@@ -193,15 +191,8 @@
       <div class="side-panel-launcher-list">
         <button class="side-panel-launcher-action" type="button" data-side-panel-action="files"><span class="icon-slot" data-icon="file"></span><span>File preview</span></button>
         <button class="side-panel-launcher-action" type="button" data-side-panel-action="terminal"><span class="icon-slot" data-icon="terminal"></span><span>Terminal</span></button>
-        <button class="side-panel-launcher-action" type="button" data-side-panel-action="review"><span class="icon-slot" data-icon="fileDiff"></span><span>Review</span></button>
         <button class="side-panel-launcher-action" type="button" data-side-panel-action="browser" hidden><span class="icon-slot" data-icon="globe"></span><span>Browser</span></button>
         <button class="side-panel-launcher-action" type="button" data-side-panel-action="side-task" hidden><span class="icon-slot" data-icon="messageSquare"></span><span>Side task</span></button>
-      </div>
-    </section>
-    <section class="review-panel-content" id="reviewPanelContent" role="tabpanel" hidden>
-      <div id="changesPanel">
-        <div class="change-summary"><span id="changeSummary">No changes yet</span><span class="review-stats" id="reviewStats"></span><button class="icon-button small" title="Toggle word wrap" id="reviewWrap"><span class="icon-slot" data-icon="wrapText"></span></button><button class="icon-button small" title="Collapse all diffs" id="reviewExpand"><span class="icon-slot" data-icon="chevronsUp"></span></button><button class="icon-button small" title="Switch to split diff" id="reviewMode"><span class="icon-slot" data-icon="columns2"></span></button><button class="icon-button small" title="Undo changes" id="reviewPatch"><span class="icon-slot" data-icon="undo"></span></button></div>
-        <div class="change-list" id="changeList"><div class="panel-empty">Changes made by Codex will appear here.</div></div>
       </div>
     </section>
     <section class="side-panel-browser" id="browserPanel" role="tabpanel" hidden aria-label="Browser">

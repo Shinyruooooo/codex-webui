@@ -1,5 +1,6 @@
 import { applyComposerSuggestion, createLatestRequestGate, filterAppModels, formatFileMention, getComposerAutocomplete, resolveComposerPlaceholder, selectModelState } from './ui-core.js';
 import { agentMessageText, renderAssistantMarkdown, renderItemImages } from './rendering.js';
+import { formatProviderModels, parseProviderModels, matchingProviderPreset } from './provider-editor.js';
 import { codexIcon, hydrateCodexIcons } from './codex-icons.js';
 import { codexInterfaceMark } from './codex-brand.js';
 import { createDomI18n, createI18n } from './i18n.js';
@@ -117,6 +118,10 @@ function handle(message){
     const p=state.pending.get(message.id);if(!p)return;state.pending.delete(message.id);
     message.type==='rpc/result'?p.resolve(message.result):p.reject(createBridgeError(message.error,message.code));return;
   }
+  if(message.type==='providers/updated'){
+    if(!providerState.mutationBusy){if(state.connected)void refreshModels();if($('#settingsDialog').open)void loadModelProviders()}
+    return;
+  }
   if(message.type==='codex/notification') onNotification(message.payload.method,message.payload.params||{});
   if(message.type==='codex/request') onServerRequest(message.payload);
 }
@@ -223,13 +228,13 @@ function applyRateLimits(payload){
 }
 const settingsPageAliases={general:'general-settings',account:'profile',keyboard:'keyboard-shortcuts'};
 const settingsPages={
-  'general-settings':{title:'General'},appearance:{title:'Appearance'},agent:{title:'Configuration'},profile:{title:'Profile'},'keyboard-shortcuts':{title:'Keyboard shortcuts'},
+  'general-settings':{title:'General'},appearance:{title:'Appearance'},agent:{title:'Configuration'},providers:{title:'Model providers'},profile:{title:'Profile'},'keyboard-shortcuts':{title:'Keyboard shortcuts'},
 };
 function normalizeSettingsPage(page='general-settings'){const candidate=settingsPageAliases[page]||page;return settingsPages[candidate]?candidate:'general-settings'}
 function settingsRoutePage(pathname=location.pathname){const match=pathname.match(/^\/settings(?:\/([^/]+))?\/?$/);return match?normalizeSettingsPage(match[1]||'general-settings'):null}
 function settingsPlaceholderRows(page){if(page==='agent')return[['Model',modelDisplay(selectedModel())],['Reasoning effort',reasoningLabel($('#effortSelect').value)],['Approval',selectedPermission().label],['Web search','Automatic']];return settingsPages[page]?.rows||[]}
 function renderSettingsPlaceholder(page){const definition=settingsPages[page],title=$('#settingsPlaceholderTitle'),description=$('#settingsPlaceholderDescription'),rows=$('#settingsPlaceholderRows');title.textContent=t(definition.title);description.hidden=true;description.textContent='';rows.replaceChildren();for(const [label,value] of settingsPlaceholderRows(page)){const row=document.createElement('div');row.className='settings-row settings-readonly-row';const copy=document.createElement('span'),strong=document.createElement('strong'),status=document.createElement('span');strong.textContent=t(label);copy.append(strong);status.textContent=t(value);row.append(copy,status);rows.append(row)}}
-function setSettingsPage(page='general-settings',{updateRoute=true}={}){const selected=normalizeSettingsPage(page),contentPage=['general-settings','appearance','profile','keyboard-shortcuts'].includes(selected)?selected:'placeholder';for(const button of document.querySelectorAll('[data-settings-page]'))button.classList.toggle('active',button.dataset.settingsPage===selected);for(const content of document.querySelectorAll('[data-settings-content]'))content.hidden=content.dataset.settingsContent!==contentPage;if(contentPage==='placeholder')renderSettingsPlaceholder(selected);$('#settingsPageTitle').textContent=t(settingsPages[selected].title);$('#settingsContent')?.scrollTo({top:0});if(updateRoute&&settingsRoutePage())history.replaceState({...history.state,codexWebuiSettings:true},'',`/settings/${selected}`)}
+function setSettingsPage(page='general-settings',{updateRoute=true}={}){const selected=normalizeSettingsPage(page),contentPage=['general-settings','appearance','providers','profile','keyboard-shortcuts'].includes(selected)?selected:'placeholder';for(const button of document.querySelectorAll('[data-settings-page]'))button.classList.toggle('active',button.dataset.settingsPage===selected);for(const content of document.querySelectorAll('[data-settings-content]'))content.hidden=content.dataset.settingsContent!==contentPage;if(contentPage==='providers')void loadModelProviders();if(contentPage==='placeholder')renderSettingsPlaceholder(selected);$('#settingsPageTitle').textContent=t(settingsPages[selected].title);$('#settingsContent')?.scrollTo({top:0});if(updateRoute&&settingsRoutePage())history.replaceState({...history.state,codexWebuiSettings:true},'',`/settings/${selected}`)}
 function filterSettingsNavigation(query=''){const normalized=query.trim().toLocaleLowerCase(),clear=$('#clearSettingsSearch');let visible=0;if(clear)clear.hidden=!normalized;for(const group of document.querySelectorAll('[data-settings-group]')){let groupVisible=0;for(const button of group.querySelectorAll('[data-settings-page]')){const available=button.dataset.settingsAvailable!=='false',matches=!normalized||button.textContent.toLocaleLowerCase().includes(normalized);button.hidden=!available||!matches;if(!button.hidden){groupVisible++;visible++}}group.hidden=groupVisible===0}$('#settingsNavEmpty').hidden=visible!==0}
 function clearSettingsSearch(){const input=$('#settingsSearch');input.value='';filterSettingsNavigation();input.focus()}
 function showSettingsMobileNavigation(){const dialog=$('#settingsDialog');dialog.dataset.mobilePage='false';requestAnimationFrame(()=>$('#settingsSearch').focus())}
@@ -239,6 +244,131 @@ function closeSettings(){if(settingsRoutePage()){if(typeof history.state?.codexS
 $('#closeSettingsNav').onclick=closeSettings;$('#settingsMobileBack').onclick=showSettingsMobileNavigation;for(const button of document.querySelectorAll('.settings-page .settings-mobile-back'))button.onclick=showSettingsMobileNavigation;$('#settingsSearch').oninput=event=>filterSettingsNavigation(event.currentTarget.value);$('#clearSettingsSearch').onclick=clearSettingsSearch;$('#settingsSearch').onkeydown=event=>{if(event.key==='Escape'&&event.currentTarget.value){event.preventDefault();clearSettingsSearch()}};addEventListener('resize',syncSettingsResponsiveLayout);addEventListener('popstate',()=>{const page=settingsRoutePage();if(page){showSettings(page,{updateRoute:false});return}hideSettings()});
 function showSettings(page='general-settings',{updateRoute=true}={}){toggleAccountMenu(false);syncPermissionSettings();$('#settingsPermissionValue').textContent=t(selectedPermission().label);$('#settingsProjectValue').textContent=state.projectless?t('No project'):shortPath(state.active?.cwd||$('#projectPath').textContent);$('#settingsSearch').value='';filterSettingsNavigation();setSettingsPage(page,{updateRoute});const dialog=$('#settingsDialog'),mobile=matchMedia('(max-width:480px)').matches;settingsMobileLayout=mobile;dialog.dataset.mobilePage=String(mobile);if(!dialog.open)dialog.show();document.body.classList.add('settings-open');requestAnimationFrame(()=>{const target=mobile?$('#settingsSearch'):document.querySelector('.settings-nav-back');target?.focus()})}
 function openSettings(page='general-settings'){const selected=normalizeSettingsPage(page),current=settingsRoutePage();if(!current){history.pushState({codexWebuiSettings:true,codexSettingsReturnPath:location.pathname+location.search+location.hash},'',`/settings/${selected}`)}else if(current!==selected){history.replaceState({...history.state,codexWebuiSettings:true},'',`/settings/${selected}`)}showSettings(selected,{updateRoute:false})}
+const providerState={providers:[],presets:[],editing:null,presetId:'custom',models:[],mutationBusy:false,refreshInfo:new Map(),revision:null,editorRevision:null};
+function setProviderMutationBusy(busy){
+  providerState.mutationBusy=busy;$('#providerForm').setAttribute('aria-busy',String(busy));
+  for(const control of document.querySelectorAll('#providerRows button,#providerRows input,#providerPresetCards button,#providerPresetCards input,#providerAddButton,#providerSaveButton,#providerCancelButton'))control.disabled=busy||control.dataset.unconfigured==='true';
+  $('#providerRefreshAllButton').disabled=busy||!providerState.providers.length;
+}
+function modelProviderOf(id){const entry=state.models.find(model=>model.model===id);return entry?.modelProvider||null}
+async function refreshModels(){try{const result=await rpc('model/list',{limit:50});state.models=filterAppModels(result?.data||[]);renderModels()}catch(error){if(!error?.silentTransportSwitch)toast(error.message)}}
+async function waitForCodexBridge(timeout=20000){const started=Date.now();let sawDisconnect=false;for(;;){try{const response=await fetch('/api/health',{cache:'no-store'}),body=await response.json();if(!body.codex)sawDisconnect=true;if(body.codex&&(sawDisconnect||Date.now()-started>1500))return}catch{}if(Date.now()-started>timeout)throw new Error(t('Codex bridge did not reconnect'));await new Promise(resolve=>setTimeout(resolve,250))}}
+async function loadModelProviders(){
+  try{
+    const response=await fetch('/api/providers',{cache:'no-store'}),payload=await response.json();
+    if(!response.ok)throw new Error(payload.error||t('Cannot load providers'));
+    providerState.providers=payload.providers||[];providerState.presets=payload.presets||[];providerState.revision=payload.revision;renderProviderRows();
+  }catch(error){toast(error.message)}
+}
+function providerEnabledCount(provider){return provider.enabled===false?0:provider.models.filter(model=>model.enabled!==false).length}
+function providerToggleControl({checked,disabled=false,label,onchange,modelId,providerId}){
+  const wrapper=document.createElement('label');wrapper.className='provider-toggle';
+  const input=document.createElement('input');input.type='checkbox';input.checked=checked;input.setAttribute('role','switch');input.setAttribute('aria-label',label);input.dataset.providerId=providerId;
+  if(modelId)input.dataset.modelId=modelId;input.dataset.unconfigured=String(disabled);input.disabled=disabled||providerState.mutationBusy;input.onchange=()=>onchange(input.checked);
+  const track=document.createElement('span');track.className='settings-switch';track.setAttribute('aria-hidden','true');
+  wrapper.append(input,track);return wrapper;
+}
+function renderProviderCards(){
+  const grid=$('#providerPresetCards');grid.replaceChildren();
+  for(const preset of [...providerState.presets,{id:'custom',label:'Custom endpoint'}]){
+    const provider=preset.provider?providerState.providers.find(item=>item.id===preset.provider.id&&item.baseUrl===preset.provider.baseUrl):null;
+    const count=provider?providerEnabledCount(provider):0,all=Boolean(provider&&count===provider.models.length);
+    const card=document.createElement('article');card.className='provider-preset-card';card.dataset.presetId=preset.id;card.dataset.configured=String(Boolean(provider));
+    const button=document.createElement('button');button.type='button';button.className='provider-card-main';button.disabled=providerState.mutationBusy;button.onclick=()=>openProviderEditor(provider||null,preset.id);
+    const icon=document.createElement('span');icon.className='provider-card-icon';icon.setAttribute('aria-hidden','true');icon.textContent=({'zai-cn':'GLM',zai:'Z',deepseek:'DS',custom:'+'})[preset.id]||'AI';
+    const copy=document.createElement('span');copy.className='provider-card-copy';const name=document.createElement('strong');name.textContent=t(preset.label);
+    const status=document.createElement('small');status.textContent=preset.id==='custom'?t('Configure a Responses endpoint'):provider?`${t('Configured')} · ${count}/${provider.models.length} ${t('Models enabled')}`:t('Not configured');
+    copy.append(name,status);button.append(icon,copy);card.append(button);
+    if(preset.provider){const controls=document.createElement('div');controls.className='provider-card-controls';const label=document.createElement('span');label.textContent=t(all?'Enabled':count?'Partially enabled':'Disabled');controls.append(label,providerToggleControl({checked:all,disabled:!provider,label:`${t('Enable all models')}: ${t(preset.label)}`,providerId:provider?.id||preset.provider.id,onchange:enabled=>mutateProviderCatalog({action:'toggle',id:provider.id,enabled},'Model selection updated')}));card.append(controls)}
+    grid.append(card);
+  }
+}
+function renderProviderRows(){
+  renderProviderCards();$('#providerRefreshAllButton').disabled=providerState.mutationBusy||!providerState.providers.length;
+  const rows=$('#providerRows');if(!rows)return;
+  const open=new Set([...rows.querySelectorAll('details[open]')].map(node=>node.dataset.providerId));rows.replaceChildren();
+  if(!providerState.providers.length){const empty=document.createElement('div');empty.className='settings-row settings-readonly-row';empty.innerHTML=`<span><strong>${t('No custom providers')}</strong><small>${t('Add a Responses-compatible endpoint to use third-party models')}</small></span>`;rows.append(empty);return}
+  for(const provider of providerState.providers){
+    const group=document.createElement('section');group.className='provider-group';group.dataset.providerId=provider.id;
+    const row=document.createElement('div');row.className='settings-row settings-readonly-row';
+    const copy=document.createElement('span');copy.className='provider-meta';const count=providerEnabledCount(provider);
+    const strong=document.createElement('strong');strong.textContent=provider.name;
+    const url=document.createElement('small');url.textContent=`${provider.baseUrl} · ${count}/${provider.models.length} ${t('Models enabled')}${provider.hasApiKey?'':' · '+t('API key missing')}`;copy.append(strong,url);
+    const actions=document.createElement('span');actions.className='provider-actions';
+    for(const [label,action] of [['Edit',()=>openProviderEditor(provider)],['Delete',()=>deleteProvider(provider.id)],['Refresh models',()=>mutateProviderCatalog({action:'refresh',id:provider.id})]]){
+      const button=document.createElement('button');button.type='button';button.className='files-action-button';button.textContent=t(label);button.disabled=providerState.mutationBusy;button.onclick=action;if(label==='Refresh models')button.dataset.refreshProvider=provider.id;actions.append(button);
+    }
+    actions.append(providerToggleControl({checked:count===provider.models.length,label:`${t('Enable all models')}: ${provider.name}`,providerId:provider.id,onchange:enabled=>mutateProviderCatalog({action:'toggle',id:provider.id,enabled},'Model selection updated')}));row.append(copy,actions);group.append(row);
+    const models=document.createElement('details');models.className='provider-models';models.dataset.providerId=provider.id;models.open=open.has(provider.id);const summary=document.createElement('summary');summary.textContent=`${t('Models')} · ${count}/${provider.models.length} ${t('Enabled').toLowerCase()}`;models.append(summary);
+    for(const model of provider.models){const modelRow=document.createElement('div');modelRow.className='provider-model-row';const label=document.createElement('span');label.className='provider-model-copy';const name=document.createElement('span');name.textContent=model.displayName||model.id;const id=document.createElement('small');id.textContent=model.id;label.append(name,id);modelRow.append(label,providerToggleControl({checked:provider.enabled!==false&&model.enabled!==false,label:`${t('Enable model')}: ${model.id}`,providerId:provider.id,modelId:model.id,onchange:enabled=>mutateProviderCatalog({action:'model-toggle',id:provider.id,modelId:model.id,enabled},'Model selection updated')}));models.append(modelRow)}
+    group.append(models);const info=providerState.refreshInfo.get(provider.id);if(info){const note=document.createElement('p');note.className='provider-refresh-info';note.textContent=info;group.append(note)}rows.append(group);
+  }
+}
+function populateProviderFields(provider,preset){
+  providerState.models=provider?.models||[];
+  $('#providerIdInput').value=provider?.id||'';
+  $('#providerIdInput').disabled=Boolean(providerState.editing);
+  $('#providerNameInput').value=provider?.name||'';
+  $('#providerBaseUrlInput').value=provider?.baseUrl||'';
+  $('#providerModelsInput').value=formatProviderModels(providerState.models);
+  const existing=providerState.providers.find(item=>item.id===provider?.id&&item.baseUrl===provider?.baseUrl);
+  const keyInput=$('#providerApiKeyInput');keyInput.value='';keyInput.placeholder=existing?.hasApiKey?t('Unchanged'):'sk-…';
+  $('#providerPresetHint').textContent=t(preset?.description||'Configure your own Responses-compatible endpoint below.');
+  const docs=$('#providerPresetDocs');docs.hidden=!preset;if(preset)docs.href=preset.docsUrl;else docs.removeAttribute('href');
+  $('#providerAdvancedDetails').open=!preset;
+}
+function openProviderEditor(provider=null,presetId=null){
+  if(providerState.mutationBusy)return;
+  providerState.editing=provider?.id||null;providerState.editorRevision=providerState.revision;
+  const preset=presetId?providerState.presets.find(item=>item.id===presetId):provider?matchingProviderPreset(providerState.presets,provider):providerState.presets[0];
+  providerState.presetId=preset?.id||'custom';
+  $('#providerEditorTitle').textContent=preset?.label||provider?.name||'Provider details';
+  populateProviderFields(provider||preset?.provider,preset);
+  $('#providerForm').hidden=false;$('#providerSaveButton').disabled=false;
+  (preset?$('#providerApiKeyInput'):$('#providerIdInput')).focus();
+}
+function closeProviderEditor(force=false){if(providerState.mutationBusy&&!force)return;$('#providerForm').hidden=true;$('#providerApiKeyInput').value='';$('#providerEditorTitle').textContent='Provider details';providerState.editing=null;providerState.presetId='custom'}
+async function saveProviderEditor(submitEvent){
+  submitEvent.preventDefault();
+  if(providerState.mutationBusy)return;
+  setProviderMutationBusy(true);
+  try{
+    const models=parseProviderModels($('#providerModelsInput').value,providerState.models);
+    const response=await fetch('/api/providers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'save',expectedRevision:providerState.editorRevision,presetId:providerState.presetId,provider:{id:$('#providerIdInput').value.trim(),name:$('#providerNameInput').value.trim(),baseUrl:$('#providerBaseUrlInput').value.trim(),apiKey:$('#providerApiKeyInput').value,models}})});
+    const payload=await response.json();
+    if(!response.ok)throw new Error(payload.error||t('Cannot save provider'));
+    providerState.providers=payload.providers||[];providerState.revision=payload.revision;renderProviderRows();closeProviderEditor(true);
+    if(payload.restarted){toast(t('Provider saved · restarting Codex bridge…'));await waitForCodexBridge()}else toast(t('Provider saved'));
+    await refreshModels();
+  }catch(error){toast(t(error.message))}finally{setProviderMutationBusy(false)}
+}
+async function deleteProvider(id){
+  if(providerState.mutationBusy||!confirm(t('Delete provider?')))return;
+  setProviderMutationBusy(true);
+  try{
+    const response=await fetch('/api/providers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'delete',id})});
+    const payload=await response.json();
+    if(!response.ok)throw new Error(payload.error||t('Cannot delete provider'));
+    providerState.providers=payload.providers||[];providerState.revision=payload.revision;renderProviderRows();
+    if(payload.restarted){toast(t('Provider deleted · restarting Codex bridge…'));await waitForCodexBridge();await refreshModels()}
+  }catch(error){toast(error.message)}finally{setProviderMutationBusy(false)}
+}
+async function sendProviderCatalogAction(payload){
+  const response=await fetch('/api/providers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)}),result=await response.json();
+  if(!response.ok)throw new Error(result.error||'Cannot update model catalog');
+  providerState.providers=result.providers||[];providerState.revision=result.revision;
+  if(result.refresh){const info=result.refresh;providerState.refreshInfo.set(payload.id,`${t(info.source==='remote'?'Provider catalog refreshed':'Built-in catalog refreshed')} · ${info.added} ${t('New models (disabled by default)')}${info.warning?' · '+t(info.warning):''}`)}
+  renderProviderRows();if(result.restarted)await waitForCodexBridge();await refreshModels();return result;
+}
+async function mutateProviderCatalog(payload,message=null){
+  if(providerState.mutationBusy)return;setProviderMutationBusy(true);
+  try{await sendProviderCatalogAction(payload);toast(t(message||'Model catalog refreshed'))}catch(error){toast(t(error.message));renderProviderRows()}finally{setProviderMutationBusy(false)}
+}
+async function refreshAllProviderModels(){
+  if(providerState.mutationBusy||!providerState.providers.length)return;setProviderMutationBusy(true);
+  let completed=0;const ids=providerState.providers.map(provider=>provider.id);
+  try{for(const id of ids){try{await sendProviderCatalogAction({action:'refresh',id});completed++}catch(error){providerState.refreshInfo.set(id,t(error.message));renderProviderRows()}}toast(`${t('Model catalogs refreshed')}: ${completed}/${ids.length}`)}finally{setProviderMutationBusy(false)}
+}
 const reasoningLabels={none:'None',minimal:'Minimal',low:'Low',medium:'Medium',high:'High',xhigh:'Extra High',max:'Max',ultra:'Ultra'};
 function reasoningLabel(value){return t(reasoningLabels[value]||String(value||'Medium'))}
 function modelDisplay(model,stripPrefix=false){const value=String(model?.displayName||model?.model||state.selectedModel||'Select model').trim();if(!stripPrefix)return value;return value.replace(/^GPT-/i,'').trim()||value}
@@ -249,14 +379,18 @@ function saveThreadSettings(threadId,patch){if(!threadId)return;const map=thread
 function saveActiveThreadSettings(){if(!state.active?.id)return;const settings=threadSettings(state.active.id),effort=$('#effortSelect')?.value;saveThreadSettings(state.active.id,{model:state.selectedModel,permissionMode:state.permissionMode,efforts:{...(settings.efforts||{}),...(effort?{[state.selectedModel]:effort}:{})}})}
 function applyThreadSettings(thread){const settings=threadSettings(thread?.id),defaultModel=localStorage.getItem('codex-webui-model'),threadModel=typeof thread?.model==='string'?thread.model:null;state.selectedModel=settings.model||threadModel||defaultModel||state.models[0]?.model||'';if(!state.models.some(model=>model.model===state.selectedModel))state.selectedModel=defaultModel||state.models[0]?.model||'';updateEfforts(settings.efforts?.[state.selectedModel]);state.permissionMode=settings.permissionMode||localStorage.getItem('codex-webui-permission-mode')||'default';syncModelLabel();syncPermissionControl()}
 function renderModels(){
-  const saved=localStorage.getItem('codex-webui-model'),selection=selectModelState(state.models,saved);state.selectedModel=selection.model;
-  updateEfforts(selection.effort);syncModelLabel();renderModelMenuMain();
+  const activeSelection=state.active?.id&&state.selectedModel,previousEffort=$('#effortSelect').value;
+  if(activeSelection&&!state.models.some(model=>model.model===activeSelection)){
+    toast(t('The model for this chat is no longer configured. Restore its provider or start a new chat.'));syncModelLabel();renderModelMenuMain();return;
+  }
+  const saved=localStorage.getItem('codex-webui-model'),selection=selectModelState(state.models,activeSelection||saved);state.selectedModel=selection.model;
+  updateEfforts(activeSelection?previousEffort:selection.effort);syncModelLabel();renderModelMenuMain();
 }
-function chooseModel(model,keepOpen=false){const previous=$('#effortSelect').value;state.selectedModel=model;if(state.active?.id){const settings=threadSettings(state.active.id);updateEfforts(settings.efforts?.[model]);saveActiveThreadSettings()}else{localStorage.setItem('codex-webui-model',model);updateEfforts(previous)}syncModelLabel();if(keepOpen)renderModelMenuMain();else closeModelMenu();toast(`Model: ${modelDisplay(selectedModel())}`)}
+function chooseModel(model,keepOpen=false){const previous=$('#effortSelect').value,previousModel=state.selectedModel;state.selectedModel=model;if(state.active?.id){const previousProvider=modelProviderOf(previousModel),nextProvider=modelProviderOf(model);if(previousProvider!==nextProvider)toast(t('Switching provider requires a new chat'));const settings=threadSettings(state.active.id);updateEfforts(settings.efforts?.[model]);saveActiveThreadSettings()}else{localStorage.setItem('codex-webui-model',model);updateEfforts(previous)}syncModelLabel();if(keepOpen)renderModelMenuMain();else closeModelMenu();toast(`Model: ${modelDisplay(selectedModel())}`)}
 function syncModelLabel(){const model=selectedModel();$('#modelLabel').textContent=modelDisplay(model,true);$('#effortLabel').textContent=reasoningLabel($('#effortSelect').value)}
 function updateEfforts(preferred){
   const model=selectedModel(),effort=$('#effortSelect');effort.innerHTML='';
-  const supported=model?.supportedReasoningEfforts||[{reasoningEffort:'medium'}],values=supported.map(item=>item.reasoningEffort).filter(Boolean),saved=localStorage.getItem(`codex-webui-effort:${state.selectedModel}`),selected=[saved,preferred,model?.defaultReasoningEffort,values[0],'medium'].find(value=>values.includes(value))||'medium';
+  const supported=model?.supportedReasoningEfforts||[{reasoningEffort:'medium'}],values=supported.map(item=>item.reasoningEffort).filter(Boolean),saved=localStorage.getItem(`codex-webui-effort:${state.selectedModel}`),selected=[...(state.active?.id?[preferred,saved]:[saved,preferred]),model?.defaultReasoningEffort,values[0],'medium'].find(value=>values.includes(value))||'medium';
   for(const value of values.length?values:['medium']){const option=document.createElement('option');option.value=value;option.textContent=value;option.selected=value===selected;effort.append(option)}
   $('#effortLabel').textContent=reasoningLabel(effort.value);
 }
@@ -1195,6 +1329,7 @@ async function submitPrompt(event){
   if(pendingSubmission)return;
   closeComposerAutocomplete();closePermissionMenu();
   if(!text&&!hasAttachments&&!turnId)return;
+  if(!turnId&&state.active?.id&&!selectedModel()){toast(t('The model for this chat is no longer configured. Restore its provider or start a new chat.'));return}
   const epoch=conversationEpoch,mentions=state.composerMentions,attachments=state.composerAttachments,model=state.selectedModel,effort=$('#effortSelect').value;
   const inputItems=buildConversationInput({text,mentions,attachments}),displayText=textFromInput(inputItems)||text||[...mentions.filter(m=>m.type==='skill').map(m=>`/${m.name}`),...attachments.map(item=>`@${item.relativePath||item.filename}`)].join(' ');
   let target=state.active,optimisticId=null,acceptedTurn=turnId||null,responseTurn=null;
@@ -1386,7 +1521,7 @@ function setSidebarSearchOpen(open){const panel=$('#sidebarSearchPanel'),input=$
 function setSidebarHelpOpen(open){$('#sidebarHelpMenu').hidden=!open;$('#sidebarHelpButton').setAttribute('aria-expanded',String(open))}
 
 $('#newTab').onclick=()=>setSidePanelView('launcher','New tab');$('#utilityTab').onclick=()=>setSidePanelView($('#utilityTab').dataset.sidePanelTab,$('#utilityTab').textContent);$('#openSidePanelTab').onclick=()=>setSidePanelView('launcher','New tab');$('#browserAddressForm').onsubmit=event=>{event.preventDefault();navigateBrowser($('#browserUrl').value)};$('#browserBack').onclick=()=>moveBrowserHistory(-1);$('#browserForward').onclick=()=>moveBrowserHistory(1);$('#browserRefresh').onclick=()=>browserState.index>=0&&navigateBrowser(browserState.history[browserState.index],{push:false});$('#bottomPanelTab').onclick=()=>setBottomPanelView();for(const action of document.querySelectorAll('[data-bottom-panel-action]'))action.onclick=()=>setBottomPanelView(action.dataset.bottomPanelAction);$('#composer').addEventListener('submit',submitPrompt);$('#prompt').addEventListener('input',handlePromptInput);$('#prompt').addEventListener('click',updateComposerAutocomplete);$('#prompt').addEventListener('keyup',event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key))updateComposerAutocomplete()});$('#prompt').addEventListener('keydown',handlePromptKeydown);$('#threadSearch').addEventListener('input',renderThreads);$('#modelButton').addEventListener('click',toggleModelMenu);$('#modeButton').onclick=togglePermissionMenu;$('#confirmFullAccess').onclick=()=>{const action=pendingFullAccessAction;$('#fullAccessDialog').close();if(action==='enable')setPermissionVisibility('fullAccess',true);else setPermissionMode('full-access');pendingFullAccessAction='select'};$('#fullAccessDialog').addEventListener('close',()=>{pendingFullAccessAction='select';syncPermissionSettings()});document.querySelector('[data-composer-control="add"]').onclick=()=>$('#composerFileInput').click();$('#composerFileInput').onchange=async event=>{const input=event.currentTarget;await uploadFilesToWorkspace(input.files);input.value=''};$('#prompt').addEventListener('compositionstart',()=>{promptComposing=true});$('#prompt').addEventListener('compositionend',()=>{promptComposing=false});$('#prompt').addEventListener('paste',event=>{const files=[...(event.clipboardData?.files||[])];if(files.length){event.preventDefault();void uploadFilesToWorkspace(files)}});$('#composer').addEventListener('dragover',event=>{if(event.dataTransfer?.types?.includes('Files'))event.preventDefault()});$('#composer').addEventListener('drop',event=>{const files=[...(event.dataTransfer?.files||[])];if(files.length){event.preventDefault();void uploadFilesToWorkspace(files)}});$('#filesUpButton').onclick=()=>fileBrowserState.parent!==null&&loadWorkspaceFiles(fileBrowserState.parent);$('#filesRefreshButton').onclick=()=>loadWorkspaceFiles(fileBrowserState.dir);$('#filesUploadButton').onclick=()=>$('#composerFileInput').click();$('#filesChooseProjectButton').onclick=openFolderPicker;$('#filesTerminalButton').onclick=()=>{openUtilityPanel('terminal')};$('#sidebarTerminalButton').onclick=()=>{openUtilityPanel('terminal')};$('#filesClosePreviewButton').onclick=closeFilePreview;$('#filesOpenSidebarButton').onclick=()=>{if(overlayPanelsEnabled())setSidePanelOpen(false,false);setSidebarOpen(true);setSidebarView('files')};$('#sidebarTabSessions').onclick=()=>setSidebarView('sessions');$('#sidebarTabFiles').onclick=()=>setSidebarView('files');$('#sidebarTabSkills').onclick=()=>setSidebarView('skills');$('#skillsFilterOfficial').onclick=()=>setSkillsFilter('official');$('#skillsFilterPersonal').onclick=()=>setSkillsFilter('personal');$('#skillsNewButton').onclick=()=>openNewPersonalSkillEditor();$('#skillsRefreshButton').onclick=()=>void loadSkillsCatalog(true);$('#skillsSearchInput').oninput=event=>{skillsState.query=event.currentTarget.value||'';renderSkillsList()};$('#threadActionsButton').onclick=event=>{event.stopPropagation();toggleThreadActionsMenu()};$('#threadRenameAction').onclick=()=>{closeThreadActionsMenu();void renameActiveThread()};$('#threadExportMarkdownAction').onclick=()=>{closeThreadActionsMenu();exportActiveThread('md')};$('#threadExportJsonAction').onclick=()=>{closeThreadActionsMenu();exportActiveThread('json')};$('#threadCompactAction').onclick=()=>{closeThreadActionsMenu();void compactActiveThread()};$('#threadDeleteAction').onclick=()=>{closeThreadActionsMenu();if(state.active)void deleteThread(state.active)};document.querySelector('[data-composer-control="dictation"]').onclick=()=>toast('Dictation requires the native desktop audio bridge.');$('#newTask').onclick=()=>startNewTask({resetDraft:!state.active});$('#projectButton').onclick=openFolderPicker;$('#projectlessOption').onclick=useProjectless;$('#accountButton').onclick=e=>{e.stopPropagation();if(state.account?.type==='chatgpt')toggleAccountMenu();else openSettings('general')};$('#folderGo').onclick=()=>loadFolders($('#folderPathInput').value);$('#folderPathInput').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();loadFolders(e.currentTarget.value)}};$('#folderUp').onclick=()=>folderBrowse.parent&&loadFolders(folderBrowse.parent);$('#folderConfirm').onclick=useSelectedFolder;$('#toggleSummaryPanel').onclick=()=>setSummaryPanelOpen($('#summaryPanel').hidden);$('#closeImageViewer').onclick=closeImageViewer;$('#imageViewerImage').onload=()=>{$('#imageViewerImage').hidden=false;$('#imageViewerError').hidden=true};$('#imageViewerImage').onerror=()=>{$('#imageViewerImage').hidden=true;$('#imageViewerError').hidden=false};$('#imageViewer').addEventListener('click',event=>{if(event.target===event.currentTarget)closeImageViewer()});$('#imageViewer').addEventListener('close',()=>{const image=$('#imageViewerImage');image.removeAttribute('src');if(imageViewerReturnFocus?.isConnected)imageViewerReturnFocus.focus();imageViewerReturnFocus=null});function mobileSidebarEnabled(){return innerWidth<720}
-$('#sidebarSearchButton').onclick=event=>{event.stopPropagation();setSidebarSearchOpen($('#sidebarSearchPanel').hidden)};$('#sidebarSearchClose').onclick=()=>setSidebarSearchOpen(false);$('#sidebarHelpButton').onclick=event=>{event.stopPropagation();setSidebarHelpOpen($('#sidebarHelpMenu').hidden)};$('#sidebarHelpSettings').onclick=()=>{setSidebarHelpOpen(false);openSettings('general-settings')};$('#sidebarHelpShortcuts').onclick=()=>{setSidebarHelpOpen(false);openSettings('keyboard-shortcuts')};$('#accountSettings').onclick=()=>openSettings('general-settings');$('#accountProfile').onclick=()=>openSettings('profile');$('#accountUsage').onclick=()=>openSettings('profile');$('#accountShortcuts').onclick=()=>openSettings('keyboard-shortcuts');for(const button of document.querySelectorAll('[data-settings-page]'))button.onclick=()=>setSettingsPage(button.dataset.settingsPage);$('#settingsAutoReviewToggle').onchange=event=>setPermissionVisibility('autoReview',event.currentTarget.checked);$('#settingsTaskNotifyToggle').onchange=event=>setTaskNotifyEnabled(event.currentTarget.checked);$('#settingsFullAccessToggle').onchange=event=>{if(!event.currentTarget.checked){setPermissionVisibility('fullAccess',false);return}event.currentTarget.checked=false;pendingFullAccessAction='enable';const dialog=$('#fullAccessDialog');if(!dialog.open)dialog.showModal()};$('#accountLogout').onclick=async()=>{if(!confirm('Log out?'))return;try{await rpc('account/logout');toggleAccountMenu(false);await loadAccount(true)}catch(error){toast(error.message)}};$('#settingsDialog').addEventListener('cancel',event=>{event.preventDefault();closeSettings()});
+$('#sidebarSearchButton').onclick=event=>{event.stopPropagation();setSidebarSearchOpen($('#sidebarSearchPanel').hidden)};$('#sidebarSearchClose').onclick=()=>setSidebarSearchOpen(false);$('#sidebarHelpButton').onclick=event=>{event.stopPropagation();setSidebarHelpOpen($('#sidebarHelpMenu').hidden)};$('#sidebarHelpSettings').onclick=()=>{setSidebarHelpOpen(false);openSettings('general-settings')};$('#sidebarHelpShortcuts').onclick=()=>{setSidebarHelpOpen(false);openSettings('keyboard-shortcuts')};$('#accountSettings').onclick=()=>openSettings('general-settings');$('#accountProfile').onclick=()=>openSettings('profile');$('#accountUsage').onclick=()=>openSettings('profile');$('#accountShortcuts').onclick=()=>openSettings('keyboard-shortcuts');for(const button of document.querySelectorAll('[data-settings-page]'))button.onclick=()=>setSettingsPage(button.dataset.settingsPage);$('#settingsAutoReviewToggle').onchange=event=>setPermissionVisibility('autoReview',event.currentTarget.checked);$('#settingsTaskNotifyToggle').onchange=event=>setTaskNotifyEnabled(event.currentTarget.checked);$('#settingsFullAccessToggle').onchange=event=>{if(!event.currentTarget.checked){setPermissionVisibility('fullAccess',false);return}event.currentTarget.checked=false;pendingFullAccessAction='enable';const dialog=$('#fullAccessDialog');if(!dialog.open)dialog.showModal()};$('#accountLogout').onclick=async()=>{if(!confirm('Log out?'))return;try{await rpc('account/logout');toggleAccountMenu(false);await loadAccount(true)}catch(error){toast(error.message)}};$('#settingsDialog').addEventListener('cancel',event=>{event.preventDefault();closeSettings()});$('#providerAddButton').onclick=()=>openProviderEditor();$('#providerForm').onsubmit=saveProviderEditor;$('#providerCancelButton').onclick=()=>closeProviderEditor();$('#providerRefreshAllButton').onclick=refreshAllProviderModels;
 $('#settingsSkillsButton').onclick=()=>{closeSettings();setSidebarOpen(true);setSidebarView('skills')};
 $('#conversation').addEventListener('scroll',()=>{const root=$('#conversation'),thread=state.active;if(root.scrollTop<=80&&thread?.olderTurnsCursor&&!thread.olderTurnsLoading)void loadOlderTurns(thread)},{passive:true});
 $('#languageSelect').value=i18n.preference;

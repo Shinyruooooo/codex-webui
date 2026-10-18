@@ -7,7 +7,7 @@ A browser workspace for Codex CLI, with conversations, project files, a terminal
 ## Features
 
 - Three-column workspace with conversations, a file tree, and an on-demand preview / terminal / diff panel.
-- Streaming responses, tool activity, command and file-change approvals, and model / reasoning-effort selection.
+- Streaming responses, tool activity, command and file-change approvals, model / reasoning-effort selection, and custom Responses-compatible model providers.
 - Session rename, drafts, context compaction, Markdown / JSON export, and running / unread-completion indicators.
 - File previews, uploads, drag-and-drop attachments, and `@` file references.
 - Official / Personal Skills, enable switches, personal skill editing, and `/skill-name` or `$skill-name` selection.
@@ -55,8 +55,45 @@ Personal skill editing/deletion currently requires Linux. Curated Skills install
 | `CODEX_WEBUI_CWD` | Repository directory | Initial project directory |
 | `CODEX_WEBUI_REVIEW_ROOT` | Initial project directory | Git root allowed for diff Undo/Reapply |
 | `CODEX_WEBUI_PASSWORD` | Unset | LAN browser login password |
+| `CODEX_WEBUI_MODELS_JSON` | `$CODEX_HOME/codex-webui-models.json` | Custom model provider store |
 
 For example, change the port with `PORT=9000 bun run start`. More options are listed in [.env.example](./.env.example); replace example paths before using them.
+
+### Custom model providers
+
+Codex only talks to endpoints that implement the OpenAI **Responses API** (`wire_api = "responses"`; Chat Completions-only gateways are not supported). Providers such as the Z.AI GLM Coding Plan (`https://api.z.ai/api/v1` or `https://open.bigmodel.cn/api/v1`) and DeepSeek (`https://api.deepseek.com`) work directly.
+
+Manage providers under **Settings → Model providers** (or edit the JSON store below and restart the service):
+
+1. Click a provider card (or **Add provider**) and enter its API key. The endpoint and model are prefilled: **GLM Coding Plan (China)**, **Z.AI Coding Plan (International)**, or **DeepSeek**. Cards show configured/enabled status; **Custom endpoint** keeps the manual setup.
+2. Optional: expand **Advanced configuration** to edit the prefilled ID, name, URL and model list. **Custom endpoint** keeps the original manual form. Models use one line each: `id`, `id | Display name`, or `id | Display name | low,medium,high`.
+3. Save. The Codex bridge restarts (interrupting running turns), custom models appear in the model picker, and new chats send `modelProvider` automatically. Switching provider requires a new chat.
+
+The GLM presets use their region-specific **Coding Plan** keys, not standard model API keys. Both regions intentionally update one `zai` provider; choose the region matching your key. Changing an endpoint requires a new key to avoid sending an old credential to a different service. DeepSeek defaults to `deepseek-flash`. Presets are a local, vendor-documented catalog, not an import of Pi's Chat/Anthropic-only providers or credentials. Provider setup saves the configuration; it does not validate a paid account or make a live inference request.
+
+**Model switches and refresh**
+
+- Provider switches enable/disable the whole model group; expand **Models** to control individual models. These settings are persisted, remove disabled models from the picker, and block new inference through the WebUI bridge. They keep credentials and do not interrupt running turns or alter Pi / standalone Codex CLI settings.
+- **Refresh models** fetches the configured endpoint's `/models` directory with its stored key; **Refresh model catalogs** refreshes configured providers sequentially. Existing metadata and choices are preserved, manual models are not deleted, and new discoveries default to **off** until you confirm Responses compatibility. A `/models` listing alone does not prove tool-use/Responses support.
+- For matching presets whose endpoint returns 404/405/501 for discovery, the UI explicitly reports a **built-in catalog** fallback. Authentication/network errors keep the previous configuration unchanged. Requests are bounded to 10 seconds and 512 KiB; redirects are rejected so the key cannot follow another endpoint. Each provider stores up to 50 models.
+- Refresh and switches do not restart the bridge. Adding/removing a connection or changing its URL, key or provider name does. Old stores without `enabled` fields remain enabled by default. If settings changed while an editor was open, saving the old snapshot returns 409; reopen it to avoid overwriting fresh models or switches. Custom IDs that collide with built-in Codex models are rejected/skipped rather than changing native model routing.
+
+The store defaults to `$CODEX_HOME/codex-webui-models.json` (mode 0600); override the path with `CODEX_WEBUI_MODELS_JSON`. API keys are injected into the app-server through environment variables and never written to `config.toml`. A key may reference an environment variable as `$VAR` instead of a literal. Example:
+
+```json
+{
+  "version": 1,
+  "providers": [
+    {
+      "id": "zai",
+      "name": "Z.AI GLM",
+      "baseUrl": "https://api.z.ai/api/v1",
+      "apiKey": "$ZAI_API_KEY",
+      "models": [{ "id": "glm-5.3", "displayName": "GLM-5.3", "efforts": ["low", "medium", "high"] }]
+    }
+  ]
+}
+```
 
 ### LAN access
 

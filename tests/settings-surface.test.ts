@@ -10,7 +10,15 @@ const document = dom.window.document;
 describe("settings surface", () => {
   test("keeps only settings pages that map to a real surface", () => {
     const pages = [...document.querySelectorAll("[data-settings-page]")].map(node => node.dataset.settingsPage);
-    expect(pages).toEqual(["general-settings", "appearance", "agent", "profile", "keyboard-shortcuts"]);
+    expect(pages).toEqual(["general-settings", "appearance", "agent", "providers", "profile", "keyboard-shortcuts"]);
+  });
+
+  test("uses provider cards without a duplicate provider dropdown in the editor", () => {
+    expect(document.querySelector("#providerPresetCards")).not.toBeNull();
+    expect(document.querySelector("#providerPresetSelect")).toBeNull();
+    expect(document.querySelector("#providerEditorTitle")).not.toBeNull();
+    expect(document.querySelector("#providerApiKeyInput")).not.toBeNull();
+    expect(document.querySelector("#providerAdvancedDetails")).not.toBeNull();
   });
 
   test("drops placeholder integrations, coding, and archived groups", () => {

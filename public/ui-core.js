@@ -31,7 +31,8 @@ export function selectModelState(models, requestedModel) {
 
 export function filterAppModels(models) {
   return (Array.isArray(models) ? models : []).filter((model) =>
-    [model?.model, model?.id, model?.displayName].some((value) => /^gpt(?:[-_.\s]|$)/i.test(String(value || ""))),
+    Boolean(model?.modelProvider)
+    || [model?.model, model?.id, model?.displayName].some((value) => /^gpt(?:[-_.\s]|$)/i.test(String(value || ""))),
   );
 }
 

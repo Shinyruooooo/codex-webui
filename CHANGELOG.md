@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-18
+
+### Added
+- Pi Web-style provider cards with configured/enabled status, a group switch, and individual model switches. Disabled models are hidden from the picker and rejected for new bridge inference while credentials and in-flight turns remain intact; visibility and catalog changes no longer restart the app-server.
+- Per-provider and all-provider model refresh: bounded authenticated `/models` discovery, safe preset fallback when unsupported, preservation of existing metadata/choices, and new models off by default. Errors leave settings unchanged, redirects are rejected, and concurrent updates are serialized with HTTP 409 conflicts.
+- Provider presets for GLM Coding Plan (China), Z.AI Coding Plan (international), and DeepSeek: select an endpoint and enter only an API key. The existing manual fields remain available under Advanced configuration, with vendor documentation links. Presets follow official Responses API documentation and do not import Pi credentials or Chat/Anthropic endpoints.
+- `test:providers` runs provider unit, real app-server/mock-endpoint integration, and browser smoke tests (including light/dark button contrast, mobile Chinese layout, key-only setup, mutation races, and model/effort preservation).
+- Custom model providers: manage OpenAI Responses-compatible third-party endpoints (for example Z.AI GLM Coding Plan or DeepSeek) in Settings → Model providers. Providers are injected into the spawned `codex app-server` with API keys passed through per-provider environment variables, custom models appear in the model picker, and new chats bind to the selected provider automatically. The provider store lives at `$CODEX_HOME/codex-webui-models.json` (override with `CODEX_WEBUI_MODELS_JSON`) and is editable at runtime; connection changes restart the bridge, while model switches and catalog changes do not.
+- New provider configuration/discovery tests, a real app-server/mock-endpoint integration suite and a settings surface browser regression suite.
+- A tag-triggered GitHub Release workflow with version/notes validation, pinned checkout action and repository-scoped authentication; no personal API token is required on the release host.
+
+### Changed
+- Removed the redundant provider-preset dropdown from the setup form. Provider cards select the preset directly; the form shows its name, API key and optional advanced settings without a second selector.
+
+### Fixed
+- Session history now explicitly requests all model providers from `thread/list` when no provider filter is supplied. This prevents Z.AI and other non-default-provider sessions from disappearing from the sidebar, while preserving explicit filters, pagination and archive semantics; history remains visible after a provider is disabled or removed.
+- Provider edits reject stale revision snapshots instead of undoing model switches or discoveries. Metadata-only saves refresh the initiating tab's picker immediately. Native provider identities and compaction requests obey visibility gates. Built-in model-ID conflicts are filtered before directory capacity limits; startup-loaded, hand-edited stores are also verified before custom routing so conflicting entries cannot hijack or disable native model selection.
+- The provider Save button uses an opaque theme foreground; its label is readable in light and dark themes instead of appearing as a blank rectangle. Long provider help text now wraps within the existing layout.
+- Provider key environment names use collision-free ID encoding; changing an endpoint requires a fresh key. Pending provider mutations cannot replace a new editor, and catalog refreshes preserve the active chat's model and reasoning effort.
+- `tests/app-server.integration.test.ts` no longer depends on the exact "outside the allowed roots" wording (current Codex reports "outside allowed roots").
+
 ## [0.5.2] - 2026-10-18
 
 ### Added

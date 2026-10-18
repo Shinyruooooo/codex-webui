@@ -39,6 +39,7 @@ Open `http://127.0.0.1:8899`. Use `bun run start` when file watching is not need
 - Send routine fixes and new features to `dev`, and record user-visible changes under `CHANGELOG.md` → Unreleased.
 - `main` tracks approved stable releases. Do not move it for daily development; merge `dev` only when a release is explicitly approved.
 - For a release, update `package.json`, `server.ts`'s `APP_VERSION`, the Changelog and `RELEASE_REPORT.md`; run the release checks before merging and create a new annotated `vX.Y.Z` tag. Never overwrite an existing published tag.
+- Push the approved `dev`/`main` updates and tag. `.github/workflows/release.yml` validates the tag against the version metadata and publishes `RELEASE_REPORT.md` as the GitHub Release notes using the repository-scoped `GITHUB_TOKEN`. Check that the workflow and public Release actually succeed; pushing a tag alone is not a published GitHub Release. Reruns leave an existing Release unchanged.
 - Check for active Codex turns before restarting a managed service. Publishing Git branches or a tag does not itself require a service restart.
 
 ## Project conventions

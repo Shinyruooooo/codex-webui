@@ -1,0 +1,52 @@
+name: Publish release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Verify version and release notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+          assert.equal(process.env.RELEASE_TAG, `v${version}`);
+          assert.ok(readFileSync('server.ts', 'utf8').includes(`const APP_VERSION = "${version}";`));
+          assert.ok(readFileSync('CHANGELOG.md', 'utf8').includes(`## [${version}] - `));
+          assert.ok(readFileSync('RELEASE_REPORT.md', 'utf8').startsWith(`# Codex PiWeb UI v${version}`));
+          NODE
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists; leaving published notes unchanged."
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Codex PiWeb UI $GITHUB_REF_NAME" \
+            --notes-file RELEASE_REPORT.md \
+            --latest

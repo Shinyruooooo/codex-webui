@@ -155,8 +155,8 @@ describe("Codex WebUI app-server bridge", () => {
       await expect(rpc("fs/readFile", { path: probe })).rejects.toThrow(/not available|not allowed/i);
       await expect(rpc("fs/writeFile", { path: writeProbe, dataBase64: Buffer.from("blocked").toString("base64") })).rejects.toThrow(/not available|not allowed/i);
       await expect(rpc("config/read", {})).rejects.toThrow(/not available|not allowed/i);
-      await expect(rpc("permissionProfile/list", { cwd: "/etc" })).rejects.toThrow(/outside the allowed roots/i);
-      await expect(rpc("thread/start", { cwd: "/etc" })).rejects.toThrow(/outside the allowed roots/i);
+      await expect(rpc("permissionProfile/list", { cwd: "/etc" })).rejects.toThrow(/outside (the )?allowed roots/i);
+      await expect(rpc("thread/start", { cwd: "/etc" })).rejects.toThrow(/outside (the )?allowed roots/i);
       expect(Bun.file(writeProbe).size).toBe(0);
     } finally {
       rmSync(probe, { force: true });

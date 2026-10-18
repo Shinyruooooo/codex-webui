@@ -1,4 +1,5 @@
 import { closeSync, createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { dirname, join, relative, resolve, extname } from "node:path";
 import { gzipSync } from "node:zlib";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -42,6 +43,22 @@ import {
   verifyStoredPassword,
 } from "./server/server-security.js";
 import { loadStoredPassword, passwordStorePath, saveStoredPassword, type StoredPassword } from "./server/password-store.ts";
+import { providerPresets, providerWithPreset } from "./server/provider-presets.ts";
+import { discoverProviderModels } from "./server/provider-model-discovery.ts";
+import {
+  loadProvidersConfig,
+  assertProviderModelEnabled,
+  mergeCustomModels,
+  normalizeProviders,
+  providerConfigArgs,
+  providerForModel,
+  providerSpawnEnv,
+  providersStorePath,
+  publicProvidersView,
+  resolveApiKey,
+  saveProvidersConfig,
+  type ProviderConfig,
+} from "./server/model-providers.ts";
 import {
   createAccountIdentityLoader,
   fetchProfileAvatar,
@@ -50,7 +67,7 @@ import {
   toPublicAccountIdentity,
 } from "./server/profile-service.ts";
 
-const APP_VERSION = "0.5.2";
+const APP_VERSION = "0.6.0";
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 8899);
 const accessToken = process.env.CODEX_WEBUI_ACCESS_TOKEN || null;
@@ -85,6 +102,18 @@ const liveSessions = new LiveSessionStore();
 const threadPaths = new Map<string, string>();
 let codexHomeDir = resolve(process.env.CODEX_HOME || join(homeDir, ".codex"));
 assertWritableCodexHome(codexHomeDir, homeDir);
+const modelsStorePath = providersStorePath(process.env);
+let providerConfig: { providers: ProviderConfig[]; warnings: string[] } = loadProvidersConfig(modelsStorePath);
+for (const warning of providerConfig.warnings) console.warn(`[codex-webui] ${warning}`);
+// threadId -> custom provider id used when the thread was started (turns can
+// only change the model, never the provider, so mismatches are rejected early).
+const threadProviders = new Map<string, string>();
+const threadModels = new Map<string, string>();
+let providerMutationInProgress = false;
+let nativeCatalogModelIds: Set<string> | null = null;
+const providerRevisionScope = randomUUID();
+let providerRevisionCounter = 0;
+function providerRevision() { return `${providerRevisionScope}:${providerRevisionCounter}`; }
 let codexSessionsRoot = resolve(codexHomeDir, "sessions");
 let skillExtraRoots = defaultSkillExtraRoots(homeDir, process.env.CODEX_WEBUI_SKILL_EXTRA_ROOTS || "");
 let seq = 1;
@@ -103,11 +132,13 @@ function startCodex() {
   if (shuttingDown) return;
   if (codex && codex.exitCode === null) return;
   const spawnCwd = isDirectory(defaultCwd) ? defaultCwd : isDirectory(homeDir) ? homeDir : process.cwd();
+  const providerArgs = providerConfigArgs(providerConfig.providers);
+  nativeCatalogModelIds = null;
   let child: ChildProcessWithoutNullStreams;
   try {
-    child = spawn("codex", ["app-server", "--stdio"], {
+    child = spawn("codex", ["app-server", "--stdio", ...providerArgs], {
       cwd: spawnCwd,
-      env: process.env,
+      env: { ...process.env, ...providerSpawnEnv(providerConfig.providers) },
       stdio: ["pipe", "pipe", "pipe"],
       detached: process.platform !== "win32",
     });
@@ -205,6 +236,14 @@ async function initialize() {
   if (typeof result?.codexHome === "string") {
     codexHomeDir = resolve(result.codexHome);
     codexSessionsRoot = resolve(codexHomeDir, "sessions");
+  }
+  // Verify the complete native namespace before accepting custom inference.
+  // A hand-edited store must not bypass the same collision rules as the API.
+  const nativeIds = await nativeModelIds();
+  if (providerConfig.providers.some(provider => provider.models.some(model => nativeIds.has(model.id)))) {
+    const warning = "Conflicting built-in model IDs in the provider store are ignored for automatic routing.";
+    if (!providerConfig.warnings.includes(warning)) providerConfig.warnings.push(warning);
+    console.warn(`[codex-webui] ${warning}`);
   }
   skillExtraRoots = defaultSkillExtraRoots(homeDir, process.env.CODEX_WEBUI_SKILL_EXTRA_ROOTS || "");
   if (skillExtraRoots.length > 0) {
@@ -329,8 +368,29 @@ function broadcast(data: any) {
   for (const client of sseClients) if (!client.writableEnded) client.write(`data: ${text}\n\n`);
 }
 
+function routedProviderForModel(model: unknown) {
+  const owner = providerForModel(providerConfig.providers, model);
+  if (owner && !nativeCatalogModelIds) throw new Error("Cannot verify the built-in model catalog. Try again shortly.");
+  return typeof model === "string" && nativeCatalogModelIds?.has(model) ? null : owner;
+}
+
+function assertRoutedModelEnabled(model: unknown, providerId?: unknown) {
+  const owner = providerForModel(providerConfig.providers, model);
+  const managedHint = providerConfig.providers.some(provider => provider.id === providerId);
+  if ((owner || managedHint) && !nativeCatalogModelIds) throw new Error("Cannot verify the built-in model catalog. Try again shortly.");
+  if (typeof model === "string" && nativeCatalogModelIds?.has(model)) {
+    if (managedHint) throw new Error("Custom model IDs must not conflict with built-in Codex models.");
+    return; // A native model is not controlled by a colliding custom file entry.
+  }
+  assertProviderModelEnabled(providerConfig.providers, model, providerId);
+}
+
 function sanitizeBrowserRpcParams(method: string, rawParams: any) {
   const params = rawParams && typeof rawParams === "object" ? { ...rawParams } : {};
+  // Codex treats omitted/null modelProviders as the configured default provider;
+  // an explicit empty list means all providers. The WebUI sidebar spans them all,
+  // including history from disabled or no-longer-configured providers.
+  if (method === "thread/list" && params.modelProviders == null) params.modelProviders = [];
   if (params.cwd !== undefined && params.cwd !== null) {
     if (typeof params.cwd !== "string" || !params.cwd.trim()) {
       throw new Error("Working directory must be a non-empty string");
@@ -350,7 +410,131 @@ function sanitizeBrowserRpcParams(method: string, rawParams: any) {
       return cwd;
     });
   }
+  if (method === "thread/start") {
+    if (!params.model && typeof params.config?.model === "string") params.model = params.config.model;
+    if (!params.model && providerConfig.providers.some(provider => provider.enabled === false || provider.models.some(model => model.enabled === false))) {
+      throw new Error("Select a model before starting this turn.");
+    }
+    const provider = routedProviderForModel(params.model);
+    // Check the model's owner as well as explicit provider hints. A hint for
+    // OpenAI must never bypass the disabled custom model check before mapping.
+    assertRoutedModelEnabled(params.model);
+    assertRoutedModelEnabled(params.model, params.modelProvider || params.config?.model_provider || provider || undefined);
+    if (provider) params.modelProvider = provider;
+    else if (providerForModel(providerConfig.providers, params.model) && nativeCatalogModelIds?.has(params.model)) params.modelProvider = "openai";
+  }
+  if (method === "turn/start" && typeof params.model === "string" && typeof params.threadId === "string") {
+    const tracked = threadProviders.get(params.threadId);
+    const owner = routedProviderForModel(params.model);
+    const requested = owner || (tracked && params.model === threadModels.get(params.threadId) ? tracked : "__default__");
+    if (tracked && tracked !== requested) {
+      const describe = (id: string) => (id === "__default__" ? "the built-in OpenAI provider" : `"${id}"`);
+      throw new Error(`This chat uses ${describe(tracked)}; start a new chat to use ${describe(requested)}`);
+    }
+  }
+  if (method === "turn/start") {
+    const model = params.model || threadModels.get(params.threadId);
+    const provider = threadProviders.get(params.threadId);
+    assertRoutedModelEnabled(model, provider && provider !== "__default__" ? provider : undefined);
+    // Model omissions are safe only when the bridge knows the thread's model.
+    // The web composer always sends a model; an untracked client must do so too.
+    if (!model && providerConfig.providers.length) throw new Error("Select a model before starting this turn.");
+  }
   return params;
+}
+
+function mergeIntoModelList(result: any) {
+  if (!providerConfig.providers.length || !result || typeof result !== "object") return;
+  result.data = mergeCustomModels(result, providerConfig.providers).data;
+}
+
+function rememberThreadProvider(threadId: unknown, model: unknown, actualProvider?: unknown) {
+  if (typeof threadId !== "string" || !threadId) return;
+  // Tracks both custom and default-provider threads created through this bridge;
+  // turns may switch models but never cross providers.
+  const nativeProvider = typeof actualProvider === "string" && actualProvider ? actualProvider : undefined;
+  threadProviders.set(threadId, nativeProvider ? nativeProvider === "openai" ? "__default__" : nativeProvider : routedProviderForModel(model) || threadProviders.get(threadId) || "__default__");
+  if (typeof model === "string") threadModels.set(threadId, model);
+  if (threadProviders.size > 2000) {
+    const oldest = threadProviders.keys().next().value as string;
+    threadProviders.delete(oldest);threadModels.delete(oldest);
+  }
+}
+
+function providerConnectionFingerprint(providers: ProviderConfig[]) {
+  // All configured connections remain registered. Visibility/model toggles
+  // gate NEW requests in this bridge and do not interrupt in-flight turns.
+  return JSON.stringify([...providers].sort((a,b) => a.id.localeCompare(b.id)).map(provider => [
+    provider.id, provider.name, provider.baseUrl, resolveApiKey(provider.apiKey) || "",
+  ]));
+}
+
+async function nativeModelIds() {
+  const catalog = await request("model/list", { limit: 1000, includeHidden: true });
+  if (!Array.isArray(catalog?.data) || catalog.nextCursor) throw new Error("Cannot verify the built-in model catalog. Try again shortly.");
+  nativeCatalogModelIds = new Set<string>(catalog.data.map((entry: any) => entry.model || entry.id).filter((id: any) => typeof id === "string"));
+  return nativeCatalogModelIds;
+}
+
+/** Called under the HTTP mutation lock; remote discovery never races a save. */
+async function applyProvidersMutation(payload: any) {
+  const action = payload?.action;
+  const current = providerConfig.providers;
+  let next: ProviderConfig[];
+  let discovery: Awaited<ReturnType<typeof discoverProviderModels>> | undefined;
+  if (["delete", "toggle", "model-toggle", "refresh"].includes(action)) {
+    const provider = current.find(entry => entry.id === payload?.id);
+    if (!provider) throw new Error("Unknown provider");
+    if (action === "delete") next = current.filter(entry => entry.id !== provider.id);
+    else if (action === "refresh") {
+      // Exclude native IDs BEFORE applying the directory-size limit, so a
+      // rejected GPT alias cannot consume a slot needed by a valid model.
+      discovery = await discoverProviderModels(provider, { excludedModelIds: await nativeModelIds() });
+      next = current.map(entry => entry.id === provider.id ? { ...entry, models: discovery!.models } : entry);
+    } else {
+      if (typeof payload.enabled !== "boolean") throw new Error("Enabled must be a boolean");
+      if (action === "model-toggle" && !provider.models.some(model => model.id === payload.modelId)) throw new Error("Unknown model");
+      next = current.map(entry => entry.id !== provider.id ? entry : action === "toggle"
+        ? { ...entry, enabled: payload.enabled, models: entry.models.map(model => ({ ...model, enabled: payload.enabled })) }
+        : { ...entry, enabled: payload.enabled ? true : entry.enabled, models: entry.models.map(model => model.id === payload.modelId ? { ...model, enabled: payload.enabled } : model) });
+    }
+    next = normalizeProviders({ providers: next });
+  } else if (action === "save") {
+    const raw = providerWithPreset(payload?.presetId, payload?.provider);
+    const previous = current.find(provider => provider.id === raw.id);
+    const native = await nativeModelIds();
+    if (Array.isArray(raw.models) && raw.models.some((model: any) => typeof model?.id === "string" && native.has(model.id.trim()))) {
+      throw new Error("Custom model IDs must not conflict with built-in Codex models.");
+    }
+    const unchangedEndpoint = previous?.baseUrl === raw.baseUrl;
+    const apiKey = typeof raw.apiKey === "string" && raw.apiKey.trim() ? raw.apiKey : unchangedEndpoint ? previous?.apiKey : undefined;
+    if (payload?.presetId && payload.presetId !== "custom" && !resolveApiKey(apiKey)) throw new Error("An API key is required for this provider preset");
+    if (previous?.apiKey && !unchangedEndpoint && !resolveApiKey(apiKey)) throw new Error("Enter a new API key when changing the provider endpoint");
+    const models = Array.isArray(raw.models) ? raw.models.map((model: any) => ({
+      ...model, enabled: model.enabled ?? previous?.models.find(entry => entry.id === model.id)?.enabled ?? true,
+    })) : raw.models;
+    next = normalizeProviders({ providers: [
+      ...current.filter(provider => provider.id !== raw.id),
+      { id: raw.id, name: raw.name, baseUrl: raw.baseUrl, apiKey, enabled: raw.enabled ?? previous?.enabled ?? true, models },
+    ] });
+  } else throw new Error("Unknown provider action");
+  const changed = JSON.stringify(next) !== JSON.stringify(current);
+  const connectionChanged = providerConnectionFingerprint(next) !== providerConnectionFingerprint(current);
+  let restarted = false;
+  if (changed) {
+    saveProvidersConfig(modelsStorePath, next);
+    providerConfig = { providers: next, warnings: [] };
+    providerRevisionCounter++;
+    if (connectionChanged && codex && codex.exitCode === null) {
+      restarted = true;
+      connected = false;
+      terminateCodex();
+    }
+    // Other open browser tabs must refresh their visible model/provider state.
+    broadcast({ type: "providers/updated" });
+  }
+  const refresh = discovery ? { source: discovery.source, added: discovery.added, discovered: discovery.discovered, warning: discovery.warning } : undefined;
+  return { ok: true, restarted, refresh, revision: providerRevision(), ...publicProvidersView(providerConfig.providers) };
 }
 
 async function nativeSkillsFor(cwd: string, forceReload = false) {
@@ -384,10 +568,23 @@ async function dispatchBrowserMessage(message: any) {
         delete params.name;
         delete params.cwd;
       }
+      if (message.method === "thread/compact/start") {
+        if (!threadProviders.has(params.threadId) || !threadModels.has(params.threadId)) {
+          const resumed = await request("thread/resume", { threadId: params.threadId });
+          rememberThreadProvider(resumed?.thread?.id || params.threadId, resumed?.model, resumed?.modelProvider || resumed?.thread?.modelProvider);
+        }
+        if (!threadModels.has(params.threadId)) throw new Error("Cannot determine this chat's model before compaction.");
+        const provider = threadProviders.get(params.threadId);
+        assertRoutedModelEnabled(threadModels.get(params.threadId), provider !== "__default__" ? provider : undefined);
+      }
       const result = message.method === "host/thread/live"
         ? await readLiveThread(params.threadId)
         : await request(message.method, params);
       recordThreadPathsFromRpc(result);
+      if (message.method === "model/list") mergeIntoModelList(result);
+      if (message.method === "thread/start") rememberThreadProvider(result?.thread?.id, result?.model || params.model, result?.modelProvider || result?.thread?.modelProvider || params.modelProvider || params.config?.model_provider);
+      if (message.method === "thread/resume" && (params.model || result?.model)) rememberThreadProvider(result?.thread?.id || params.threadId, result?.model || params.model, result?.modelProvider || result?.thread?.modelProvider || params.modelProvider);
+      if (message.method === "turn/start" && typeof params.model === "string") threadModels.set(params.threadId, params.model);
       if (message.method === "thread/list" || message.method === "thread/read" || message.method === "thread/resume") {
         enrichThreadsWithLiveRollout(result);
       }
@@ -742,6 +939,48 @@ const server = createServer(async (req, res) => {
   if (url.pathname === "/api/config") {
     res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
     res.end(JSON.stringify({ home: homeDir, defaultCwd, reviewRoot: reviewRoots[0], projectless }));
+    return;
+  }
+  if (url.pathname === "/api/providers") {
+    if (req.method !== "GET" && req.method !== "POST") {
+      res.writeHead(405, { "content-type": "application/json; charset=utf-8", allow: "GET, POST", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: "Method not allowed" }));
+      return;
+    }
+    if (req.method === "GET") {
+      const view = publicProvidersView(providerConfig.providers);
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify({ ...view, revision: providerRevision(), presets: providerPresets(), warnings: providerConfig.warnings, storePath: modelsStorePath }));
+      return;
+    }
+    let payload: any;
+    try { payload = await readJsonBody(req, 128_000); }
+    catch (error) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: error instanceof Error ? error.message : "Invalid providers payload" }));
+      return;
+    }
+    if (payload?.action === "save" && payload.expectedRevision !== undefined && payload.expectedRevision !== providerRevision()) {
+      res.writeHead(409, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: "Provider configuration changed. Reopen the editor before saving." }));
+      return;
+    }
+    if (providerMutationInProgress) {
+      res.writeHead(409, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: "Another provider update is in progress. Try again shortly." }));
+      return;
+    }
+    providerMutationInProgress = true;
+    try {
+      const updated = await applyProvidersMutation(payload);
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      res.end(JSON.stringify(updated));
+    } catch (error) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+    } finally {
+      providerMutationInProgress = false;
+    }
     return;
   }
   if (url.pathname === "/api/workspace/context") {

@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- The release workflow supports manually publishing an existing version tag when its original push event has no run; it verifies the exact tagged source and notes without moving the tag.
+
 ## [0.6.0] - 2026-10-18
 
 ### Added

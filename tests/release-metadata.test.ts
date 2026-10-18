@@ -20,10 +20,12 @@ describe("release metadata", () => {
     expect(notes).toContain(`**Release tag:** \`v${version}\``);
   });
 
-  test("publishes only version tags with pinned checkout and explicit notes", () => {
+  test("publishes verified version tags automatically or through manual recovery", () => {
     const workflow = read(".github/workflows/release.yml");
     expect(workflow).toContain('tags:\n      - "v*.*.*"');
     expect(workflow).not.toContain("pull_request");
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("ref: refs/tags/${{ env.RELEASE_TAG }}");
     expect(workflow).toMatch(/uses: actions\/checkout@[a-f0-9]{40}/);
     expect(workflow).toContain("persist-credentials: false");
     expect(workflow).toContain("contents: write");

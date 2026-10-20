@@ -80,6 +80,27 @@ describe("session tools", () => {
       { type: "text", text: "" },
       { type: "localImage", path: "/tmp/pic.png" },
     ]);
+    expect(buildConversationInput({
+      text: "Look",
+      attachments: [{ kind: "image", isImage: true, mimeType: "image/png", data: "abc", filename: "shot.png" }],
+    })).toEqual([
+      { type: "text", text: "Look" },
+      { type: "image", url: "data:image/png;base64,abc" },
+    ]);
+  });
+
+  test("does not persist inline image bytes in drafts", () => {
+    const storage = memoryStorage();
+    writeThreadDraft("thread-1", "", {
+      text: "with image",
+      attachments: [{ id: "img-1", kind: "image", isImage: true, mimeType: "image/png", data: "abc", previewUrl: "data:image/png;base64,abc", filename: "shot.png" }],
+    }, storage);
+    expect(readThreadDraft("thread-1", "", storage)).toEqual({
+      text: "with image",
+      mentions: [],
+      attachments: [{ id: "img-1", kind: "image", isImage: true, mimeType: "image/png", filename: "shot.png", inlineOmitted: true }],
+    });
+    expect(JSON.stringify(storage.values)).not.toContain("base64,abc");
   });
 
   test("exports ordered conversation content and only known metadata", () => {

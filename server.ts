@@ -67,7 +67,7 @@ import {
   toPublicAccountIdentity,
 } from "./server/profile-service.ts";
 
-const APP_VERSION = "0.6.1";
+const APP_VERSION = "0.7.0";
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 8899);
 const accessToken = process.env.CODEX_WEBUI_ACCESS_TOKEN || null;
@@ -1302,6 +1302,18 @@ const server = createServer(async (req, res) => {
       }
       res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
       res.end(JSON.stringify(toPublicAccountIdentity(await resolveAccountIdentity({ account: null, requiresOpenaiAuth: true }))));
+    }
+    return;
+  }
+  if (url.pathname === "/api/cwd/validate") {
+    try {
+      const path = resolveBrowsePath(url.searchParams.get("path") || "", browseRoots, homeDir);
+      if (!isDirectory(path)) throw new Error("Directory not found");
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ ok: true, path }));
+    } catch (error) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
     }
     return;
   }

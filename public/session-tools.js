@@ -1,3 +1,5 @@
+import { draftAttachment, inlineImageUrl } from "./chat-images.js";
+
 export const DRAFT_STORAGE_PREFIX = "codex-webui-draft:";
 
 export function draftStorageKey(threadId = null, cwd = "") {
@@ -45,7 +47,8 @@ export function writeThreadDraft(threadId = null, cwd = "", draft = {}, storage 
       target.removeItem(key);
       return;
     }
-    target.setItem(key, JSON.stringify({ text, mentions, ...(attachments.length ? { attachments } : {}) }));
+    const storedAttachments = attachments.map(draftAttachment);
+    target.setItem(key, JSON.stringify({ text, mentions, ...(storedAttachments.length ? { attachments: storedAttachments } : {}) }));
   } catch {
     // Storage can be unavailable (for example, in private browsing); drafts are optional.
   }
@@ -56,14 +59,17 @@ export function buildConversationInput({ text = "", mentions = [], attachments =
   const input = [];
   const filePaths = [];
   const imagePaths = new Set();
+  const inlineImages = [];
   const attachmentList = Array.isArray(attachments) ? attachments : [];
 
   for (const attachment of attachmentList) {
     if (!attachment || typeof attachment !== "object") continue;
     if (attachment.isImage === true || attachment.kind === "image") {
-      const path = attachment.fullPath || attachment.path;
-      if (typeof path === "string" && path && !imagePaths.has(path)) {
-        imagePaths.add(path);
+      const url = inlineImageUrl(attachment);
+      if (url && !inlineImages.includes(url)) inlineImages.push(url);
+      else if (!url) {
+        const path = attachment.fullPath || attachment.path;
+        if (typeof path === "string" && path && !imagePaths.has(path)) imagePaths.add(path);
       }
       continue;
     }
@@ -109,6 +115,7 @@ export function buildConversationInput({ text = "", mentions = [], attachments =
     input.push({ type: "mention", name, path: rawPath });
   }
 
+  for (const url of inlineImages) input.push({ type: "image", url });
   for (const path of imagePaths) input.push({ type: "localImage", path });
   return input;
 }

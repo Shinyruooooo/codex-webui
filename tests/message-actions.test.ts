@@ -307,6 +307,37 @@ describe("message copy actions", () => {
     expect(root.querySelector("pre")).not.toBe(oldPre);
   });
 
+  test("shows a retry control only for a failed message and resends that message", () => {
+    const dom = makeDom("<article><p>original</p></article>");
+    const root = dom.window.document.querySelector("article")!;
+    const actions = createMessageActions({ translate: (label) => label === "Retry message" ? "重试这条消息" : label });
+    let retries = 0;
+    actions.updateMessageRetry(root, { visible: false, error: "hidden", onRetry: () => { retries += 1; } });
+    expect(root.querySelector(".message-retry-actions")?.hidden).toBe(true);
+    expect(root.classList.contains("failed")).toBe(false);
+
+    actions.updateMessageRetry(root, { visible: true, error: "Codex error <img>", disabled: false, onRetry: () => { retries += 1; } });
+    const button = root.querySelector(".message-retry-button") as HTMLButtonElement;
+    const event = new dom.window.MouseEvent("click", { bubbles: true, cancelable: true });
+    let bubbled = false;
+    root.addEventListener("click", () => { bubbled = true; });
+    button.dispatchEvent(event);
+    expect(retries).toBe(1);
+    expect(event.defaultPrevented).toBe(true);
+    expect(bubbled).toBe(false);
+    expect(button.getAttribute("aria-label")).toBe("重试这条消息");
+    expect(button.title).toBe("重试这条消息: Codex error <img>");
+    expect(button.querySelector(".message-retry-label")).toBeNull();
+    expect(root.querySelector(".message-retry-error")).toBeNull();
+    expect(root.querySelector("img")).toBeNull();
+    expect(root.querySelector("button[data-copy-kind='message']")).toBeNull();
+
+    actions.updateMessageRetry(root, { visible: true, disabled: true, error: "busy", onRetry: () => { retries += 1; } });
+    button.click();
+    expect(retries).toBe(1);
+    expect(button.disabled).toBe(true);
+  });
+
   test("prevents click default and propagation", () => {
     const dom = makeDom("<article><pre><code>x</code></pre></article>");
     const root = dom.window.document.querySelector("article")!;

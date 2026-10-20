@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-20
+
+### Added
+- Failed conversation bubbles now have a retry button that resends that message, including its original text and image attachments.
+- The working directory is a first-class, URL-addressable choice: `?cwd=` restores it on load, the New chat button shows the directory a new task will run in, the empty state displays it with a shortcut to change it, and `GET /api/cwd/validate` validates a candidate directory.
+
+### Changed
+- Images pasted or attached in the composer are kept in the message as inline data, matching Pi Web, instead of being written into the project directory. Project file uploads still go to the working directory.
+- Opening a history thread no longer changes the project directory used for new tasks, and switching the working directory no longer discards the open conversation or its draft.
+
 ## [0.6.1] - 2026-10-20
 
 ### Added

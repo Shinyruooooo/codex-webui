@@ -123,6 +123,7 @@ function currentText(getText) {
 
 export function createMessageActions({ translate = (value) => value, onCopyResult = () => {}, copyText = copyTextToClipboard } = {}) {
   const messageActions = new WeakMap();
+  const retryActions = new WeakMap();
   const codeActions = new WeakMap();
   const buttonStates = new WeakMap();
 
@@ -130,6 +131,13 @@ export function createMessageActions({ translate = (value) => value, onCopyResul
     const translated = safeTranslate(translate, label);
     button.title = translated;
     button.setAttribute("aria-label", translated);
+  }
+
+  function refreshRetryLabel(button) {
+    const label = safeTranslate(translate, "Retry message");
+    const error = button.dataset.retryError || "";
+    button.title = error ? `${label}: ${error}` : label;
+    button.setAttribute("aria-label", label);
   }
 
   function refreshLabels(root) {
@@ -140,6 +148,7 @@ export function createMessageActions({ translate = (value) => value, onCopyResul
     for (const button of buttons) {
       const state = buttonStates.get(button);
       if (state) setButtonLabel(button, state.copied ? "Copied" : state.copyLabel);
+      if (button.classList?.contains("message-retry-button")) refreshRetryLabel(button);
     }
   }
 
@@ -205,6 +214,42 @@ export function createMessageActions({ translate = (value) => value, onCopyResul
     return button;
   }
 
+  function updateMessageRetry(root, options = {}) {
+    if (!root || typeof root.appendChild !== "function") return;
+    const visible = options.visible === true;
+    const disabled = options.disabled === true;
+    const error = typeof options.error === "string" ? options.error : "";
+    let record = retryActions.get(root);
+    if (!record) {
+      const ownerDocument = root.ownerDocument;
+      const container = ownerDocument.createElement("div");
+      container.className = "message-retry-actions";
+      const button = ownerDocument.createElement("button");
+      button.type = "button";
+      button.className = "message-retry-button";
+      button.dataset.i18nUi = "Retry message";
+      button.append(makeIcon(ownerDocument, "refreshCw"));
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (button.disabled) return;
+        try { record.onRetry?.(); } catch {}
+      });
+      container.append(button);
+      const message = root.querySelector(":scope > .user-message");
+      if (message) message.after(container);
+      else root.appendChild(container);
+      record = { container, button, onRetry: null };
+      retryActions.set(root, record);
+    }
+    record.onRetry = typeof options.onRetry === "function" ? options.onRetry : null;
+    record.container.hidden = !visible;
+    record.button.disabled = disabled;
+    record.button.dataset.retryError = error;
+    root.classList.toggle("failed", visible);
+    refreshRetryLabel(record.button);
+  }
+
   function updateMessageCopy(root, getText) {
     if (!root || typeof root.appendChild !== "function" || typeof getText !== "function") return;
     let record = messageActions.get(root);
@@ -255,5 +300,5 @@ export function createMessageActions({ translate = (value) => value, onCopyResul
     }
   }
 
-  return { updateMessageCopy, enhanceCodeBlocks, refreshLabels };
+  return { updateMessageCopy, updateMessageRetry, enhanceCodeBlocks, refreshLabels };
 }

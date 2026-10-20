@@ -8,11 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-20
+
 ### Added
+- Pi Web-style copy actions for user/assistant message text and fenced code blocks, with success feedback, keyboard/touch access and an HTTP-compatible clipboard fallback. Streaming/replayed messages keep one up-to-date control; copying never submits a prompt or executes code.
 - The right-side panel can be resized by dragging its left edge or using separator keyboard controls; browser-local width preferences survive reloads, double-click restores the default, and viewport limits keep the chat usable. Terminal rows/columns follow panel resizing without replacing the shell.
 - Terminal connection/output-waiting status, an explicitly confirmed reconnect action, and a copyable diagnostics dialog containing only transport/rendering metadata—not commands, terminal output or credentials. Added authenticated Chromium/WebKit coverage for terminal input, reconnect, diagnostics privacy and resizing at desktop, split-window and mobile widths.
 
 ### Fixed
+- Long unbroken strings such as public keys, paths and URLs now wrap inside user message bubbles without truncating the source. Code remains formatted in bounded, horizontally scrollable blocks.
 - Reopening an already-connected terminal on narrow/overlay layouts now keeps keyboard focus in the terminal instead of moving it to the panel close button. Added real-PTY first-open/reopen command-input coverage at desktop, split-window and mobile widths.
 
 ### Changed

@@ -12,7 +12,7 @@ Skills installed from a user's Codex cache are not included in this repository a
 
 ## Lucide icons
 
-`public/codex-icons.js` includes Lucide icon path data from `lucide-react` 0.456.0, originally obtained from a local Codex.app installation. The following notice is preserved:
+`public/codex-icons.js` includes Lucide icon path data from `lucide-react` 0.456.0, originally obtained from a local Codex.app installation. The copy icon also uses the [official Lucide 0.456.0 SVG](https://github.com/lucide-icons/lucide/blob/0.456.0/icons/copy.svg). The following notice is preserved:
 
 ISC License
 

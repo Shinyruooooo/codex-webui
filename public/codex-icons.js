@@ -1,8 +1,10 @@
-// Exact Lucide 0.456.0 icon nodes extracted from Codex.app's app.asar.
+// Lucide 0.456.0 nodes: original set extracted from Codex.app's app.asar;
+// the copy icon is from the official Lucide 0.456.0 icons/copy.svg.
 // Lucide is ISC licensed; see THIRD_PARTY_NOTICES.md in this project.
 export const codexIconNodes = {
   arrowUp: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   circleHelp: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   command: '<path d="M18 9a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3Z"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',

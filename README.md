@@ -45,6 +45,7 @@ Open **http://127.0.0.1:8899**. No separate frontend build is needed for this co
 5. Open the terminal or diff panel when needed. Conversation actions include rename, export, and context compaction.
 6. Drag the right panel's left edge to change its width; the browser remembers it. Double-click the divider to reset, or focus it and use Left/Right arrow keys (Shift for larger steps).
 7. The terminal header shows connection status. If it stays blank, open **Terminal diagnostics** (ⓘ) and copy the connection/rendering metadata; it does not include commands, output or credentials. **Reconnect terminal** asks for confirmation because it ends that terminal session and its attached programs; it does not restart the WebUI Codex service.
+8. Hover over a user or assistant message to copy its source text/Markdown (controls remain visible on touch devices). Each code block has a top-right copy button for code only, without Markdown fences. Indentation and line breaks are preserved; nothing is executed. If the browser blocks both clipboard methods, select the text and copy manually.
 
 Personal skill editing/deletion currently requires Linux. Curated Skills installation uses an existing local Codex cache; it does not download a catalog. External skill sources are read-only.
 

@@ -3,7 +3,7 @@
 // per-session drafts, IME Enter protection, thread rename/export/compact,
 // and converged panel actions without fake native-bridge placeholders.
 import assert from 'node:assert/strict';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
@@ -281,10 +281,14 @@ try {
   await waitFor(() => rpcCalls.some(call => call.method === 'turn/start'));
   const turnStart = rpcCalls.findLast(call => call.method === 'turn/start');
   const inputTypes = turnStart.params.input.map(item => item.type);
+  const imageInput = turnStart.params.input.find(item => item.type === 'image');
   assert.ok(inputTypes.includes('text'));
   assert.ok(inputTypes.includes('mention'));
-  assert.ok(inputTypes.includes('localImage'));
+  assert.ok(imageInput?.url?.startsWith('data:image/png;base64,'));
+  assert.equal(inputTypes.includes('localImage'), false);
   assert.ok(turnStart.params.input.find(item => item.type === 'text').text.includes('@spec.txt'));
+  assert.equal(existsSync(join(workspaceDir, 'diagram.png')), false);
+  assert.equal(existsSync(join(workspaceDir, 'spec.txt')), true);
 
   // 7. Project switch must not overwrite the destination project's new-chat draft.
   // Skills CRUD is covered by skills-management.e2e.mjs in an isolated CODEX_HOME.
@@ -298,8 +302,39 @@ try {
   await page.waitForSelector('#folderDialog[open] .folder-item');
   await page.click('#folderDialog .folder-item');
   await page.click('#folderConfirm');
-  assert.equal(await page.locator('#prompt').inputValue(), 'Existing docs project draft');
+  // Switching the working directory must not discard the open draft, and must
+  // not overwrite the destination project's own draft.
+  assert.equal(await page.locator('#prompt').inputValue(), 'Draft in root project');
   assert.equal(await page.evaluate(dir => JSON.parse(localStorage.getItem(`codex-webui-draft:new:${dir}`) || '{}').text, workspaceDir), 'Draft in root project');
+  assert.equal(await page.evaluate(dir => JSON.parse(localStorage.getItem(`codex-webui-draft:new:${dir}/docs`) || '{}').text, workspaceDir), 'Existing docs project draft');
+
+  // 8. The working directory is an explicit, URL-addressable choice.
+  const cwdApi = await page.evaluate(async dir => {
+    const valid = await fetch(`/api/cwd/validate?path=${encodeURIComponent(dir)}`).then(r => r.json());
+    const missing = await fetch('/api/cwd/validate?path=/definitely-not-a-real-dir-xyz').then(r => r.json());
+    return { valid, missing };
+  }, workspaceDir);
+  assert.equal(cwdApi.valid.ok, true);
+  assert.equal(cwdApi.valid.path, workspaceDir);
+  assert.equal(cwdApi.missing.ok, false);
+
+  const docsDir = join(workspaceDir, 'docs');
+  const shortDocs = docsDir.replace(process.env.HOME || '', '~');
+  const cwdState = await page.evaluate(() => {
+    const api = globalThis.__codexWebuiDebug;
+    return {
+      url: new URL(location.href).searchParams.get('cwd'),
+      newTaskTitle: document.querySelector('#newTask')?.getAttribute('title'),
+      emptyCwd: document.querySelector('.empty-cwd span')?.textContent?.trim(),
+      emptyChange: Boolean(document.querySelector('#emptyChangeDirectory')),
+      apiCwd: api.state.cwd,
+    };
+  });
+  assert.equal(cwdState.apiCwd, docsDir);
+  assert.equal(cwdState.url, docsDir);
+  assert.equal(cwdState.newTaskTitle, `New session in ${shortDocs}`);
+  assert.equal(cwdState.emptyCwd, `Working in ${shortDocs}`);
+  assert.equal(cwdState.emptyChange, true);
 
   await page.screenshot({ path: artifact('workspace-files-and-actions.png') });
   assert.deepEqual(errors, []);

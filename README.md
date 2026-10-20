@@ -40,7 +40,8 @@ Open **http://127.0.0.1:8899**. No separate frontend build is needed for this co
 
 1. Select a project folder and create or open a conversation.
 2. Choose a model and reasoning effort, then send a message. Review approval requests before allowing commands or file changes.
-3. Use Files to preview or upload files; type `@` to reference a file in your message.
+3. Use Files to preview or upload files; type `@` to reference a file in your message. Images pasted or attached in the composer stay in the message and are not written into the project folder.
+4. The working directory is shown above the composer and in the New chat tooltip; change it from the empty state, the **Projects** button, or a `?cwd=` URL.
 4. Use Skills to enable or inspect a skill; select it from `/` or `$` autocomplete to attach it to a message.
 5. Open the terminal or diff panel when needed. Conversation actions include rename, export, and context compaction.
 6. Drag the right panel's left edge to change its width; the browser remembers it. Double-click the divider to reset, or focus it and use Left/Right arrow keys (Shift for larger steps).

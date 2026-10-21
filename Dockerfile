@@ -6,16 +6,13 @@ ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates bubblewrap build-essential git node-gyp \
+        ca-certificates bubblewrap git \
         openssh-client python3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile \
-    && cd node_modules/node-pty \
-    && bun run install \
-    && test -f build/Release/pty.node
+RUN bun install --frozen-lockfile
 
 COPY . .
 

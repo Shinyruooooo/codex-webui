@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-21
+
+### Removed
+- Removed the built-in interactive terminal: sidebar/file-toolbar and panel entries, keyboard shortcut, reconnect/diagnostics UI, WebSocket transport, PTY worker and the legacy bottom panel. The removed `/terminal` endpoint now rejects connections; the authenticated `/ws` chat bridge is unchanged.
+- Removed `@xterm/xterm`, `@xterm/addon-fit`, `node-pty` and their dedicated tests, CSS and Docker native-build steps. Codex command execution, command output, approval controls, file previews and the resizable side panel remain available.
+
+### Changed
+- Added authenticated Chromium/WebKit regression coverage for terminal removal and preserved chat/file/panel behavior. No macOS/Safari connection root cause or fix is claimed by this removal.
+
 ## [0.7.0] - 2026-10-20
 
 ### Added

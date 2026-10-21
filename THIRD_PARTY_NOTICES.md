@@ -10,6 +10,10 @@ Codex PiWeb UI source code is licensed under [MIT](./LICENSE). This license does
 
 Skills installed from a user's Codex cache are not included in this repository and retain their original licenses. Other package dependencies retain the licenses distributed with those packages.
 
+## Removed terminal dependencies
+
+Earlier releases bundled a browser terminal emulator and a native PTY worker (`@xterm/xterm`, `@xterm/addon-fit`, `node-pty`). That built-in terminal has been removed together with its server endpoint, its worker process, and its dependencies, so those packages are no longer distributed with this project. Commands are executed by Codex itself and surface as command activity in the conversation.
+
 ## Lucide icons
 
 `public/codex-icons.js` includes Lucide icon path data from `lucide-react` 0.456.0, originally obtained from a local Codex.app installation. The copy icon also uses the [official Lucide 0.456.0 SVG](https://github.com/lucide-icons/lucide/blob/0.456.0/icons/copy.svg). The following notice is preserved:

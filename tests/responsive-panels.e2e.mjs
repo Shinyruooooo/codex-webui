@@ -24,15 +24,10 @@ for(const width of [1101,1150,1190]){
 for(const width of [320,360]){
   const page=await browser.newPage({viewport:{width,height:700},isMobile:true,hasTouch:true,colorScheme:'dark'});
   await page.goto(process.env.CODEX_WEBUI_TEST_URL||'http://127.0.0.1:8899',{waitUntil:'networkidle'});
-  await page.evaluate(()=>document.querySelector('#toggleBottomPanel')?.removeAttribute('hidden'));
-  await page.click('#toggleBottomPanel');
-  const bottom=await page.evaluate(()=>{const panel=document.querySelector('#bottomPanel').getBoundingClientRect();return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,panel,title:document.querySelector('#bottomPanelTab').textContent.trim(),utilityVisible:!document.querySelector('#bottomPanelUtility').hidden}});
-  await page.click('#bottomPanelTab');
-  const launcher=await page.evaluate(()=>{const panel=document.querySelector('#bottomPanel').getBoundingClientRect(),buttons=[...document.querySelectorAll('[data-bottom-panel-action]')].filter(node=>!node.hidden).map(node=>node.getBoundingClientRect().toJSON());return {title:document.querySelector('#bottomPanelTab').textContent.trim(),visible:!document.querySelector('#bottomPanelLauncher').hidden,buttonsInside:buttons.every(rect=>rect.left>=panel.left&&rect.right<=panel.right)}});
-  await page.click('[data-bottom-panel-action="terminal"]');
-  await page.waitForFunction(()=>document.querySelector('#terminalHost')?.dataset.connected==='true');
-  const terminal=await page.evaluate(()=>({title:document.querySelector('#bottomPanelTab').textContent.trim(),utilityVisible:!document.querySelector('#bottomPanelUtility').hidden,visible:!document.querySelector('#terminalHost').hidden,connected:document.querySelector('#terminalHost').dataset.connected,xterm:Boolean(document.querySelector('#terminalHost .xterm'))}));
-  const result={...bottom,launcher,terminal};
+  await page.click('#toggleSidePanel');
+  await page.waitForFunction(()=>document.querySelector('#sidePanel')&&!document.querySelector('#sidePanel').hidden);
+  const panel=await page.evaluate(()=>{const rect=document.querySelector('#sidePanel').getBoundingClientRect();return {mobileWidth:innerWidth,mobileScrollWidth:document.documentElement.scrollWidth,mobilePanelWidth:rect.width,mobilePanelLeft:rect.left,mobilePanelRight:rect.right,mobileInsideViewport:rect.left>=0&&rect.right<=innerWidth+1,hasBottomPanel:Boolean(document.querySelector('#bottomPanel,#toggleBottomPanel')),hasTerminalEntry:Boolean(document.querySelector('#sidebarTerminalButton, #filesTerminalButton, #sideTerminalPanel, #terminalHost'))};});
+  const result={...panel};
   results.push(result);
   await page.close();
 }
@@ -59,7 +54,7 @@ const sync=results.find(result=>result.breakpointSync)?.breakpointSync;
 const invalidPanel = results.some(result => {
   if (result.scrollWidth > result.width) return true;
   if ('ariaModal' in result && (result.ariaModal !== 'true' || !result.conversationInert || result.activeId !== 'closeSidePanel')) return true;
-  if ('title' in result && (result.title !== 'New tab' || result.utilityVisible || result.launcher.title !== 'New tab' || !result.launcher.visible || !result.launcher.buttonsInside || result.terminal.title !== 'Terminal' || result.terminal.utilityVisible || !result.terminal.visible || result.terminal.connected !== 'true' || !result.terminal.xterm)) return true;
+  if ('mobilePanelWidth' in result && (result.mobileScrollWidth > result.mobileWidth || result.mobilePanelWidth <= 0 || !result.mobileInsideViewport || result.hasBottomPanel || result.hasTerminalEntry)) return true;
   return false;
 });
 if(invalidPanel||!sync?.overlay.conversationInert||sync.overlay.modal!=='true'||sync.docked.conversationInert||sync.docked.modal!=='false'||!sync.overlayAgain.conversationInert||sync.overlayAgain.modal!=='true'||sync.overlayAgain.activeId!=='closeSidePanel')process.exit(1);

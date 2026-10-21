@@ -36,7 +36,7 @@ const initial=await page.evaluate(()=>{
       sidebarComputed:getComputedStyle(sidebar).backgroundColor,
       mainComputed:getComputedStyle(main).backgroundColor,
     },
-    hasHardcodedTerminalPlaceholder:Boolean(document.querySelector('.terminal-placeholder')),
+    hasTerminalEntryPoints:Boolean(document.querySelector('#sidebarTerminalButton, #filesTerminalButton, #sideTerminalPanel, #sideTerminalHost, #terminalHost')),
   };
 });
 
@@ -83,7 +83,7 @@ const valid=pageErrors.length===0
   &&initial.colors.panel
   &&initial.colors.border
   &&initial.colors.text
-  &&initial.hasHardcodedTerminalPlaceholder===false
+  &&initial.hasTerminalEntryPoints===false
   &&opened.width>=320
   &&opened.pressed==='true'
   &&opened.title==='File preview'

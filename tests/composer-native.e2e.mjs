@@ -71,6 +71,16 @@ await page.click('#modelButton');
 const solEfforts=await page.locator('#modelMenu .model-effort-row').allTextContents();
 // A star next to each model saves it as the default model for new chats.
 await page.click('#modelSubmenuButton');
+await page.evaluate(() => {
+  const api = globalThis.__codexWebuiDebug;
+  api.state.models = api.filterAppModels([...api.state.models, { model: 'e2e-provider-model', displayName: 'E2E Provider Model', modelProvider: 'e2e-provider' }]);
+  api.renderModels();
+});
+await page.click('#modelSubmenuButton');
+const providerGroups = await page.evaluate(() => ({
+  headers: [...document.querySelectorAll('#modelMenu .model-group-header')].map(node => node.textContent.trim()),
+  rows: document.querySelectorAll('#modelMenu .model-option-row').length,
+}));
 const defaultModelControls=await page.evaluate(()=>({
   stars:document.querySelectorAll('#modelMenu .model-default-star').length,
   pressed:[...document.querySelectorAll('#modelMenu .model-default-star[aria-pressed="true"]')].map(node=>node.dataset.defaultModel),
@@ -96,7 +106,7 @@ const mobileModel=await page.evaluate(()=>{
     horizontalOverflow:document.documentElement.scrollWidth>innerWidth,
   };
 });
-console.log(JSON.stringify({home,contextUsage,modelFilter,modelMain,effortSelection,modelSubmenu,lunaEfforts,solEfforts,defaultModelControls,defaultModelSaved,defaultModelAfter,mobileModel,errors},null,2));
+console.log(JSON.stringify({home,contextUsage,modelFilter,modelMain,effortSelection,modelSubmenu,providerGroups,lunaEfforts,solEfforts,defaultModelControls,defaultModelSaved,defaultModelAfter,mobileModel,errors},null,2));
 await browser.close();
 
 const expected=['add','approval','model','send'];
@@ -117,6 +127,10 @@ if(errors.length
   ||modelMain.effortRows.length<1
   ||!/Model/i.test(modelMain.modelRow||'')
   ||modelMain.directModelRows!==0
+  ||providerGroups.headers.length!==2
+  ||providerGroups.headers[0]!=='openai'
+  ||providerGroups.headers[1]!=='e2e-provider'
+  ||providerGroups.rows!==defaultModelControls.stars
   ||defaultModelControls.stars!==defaultModelControls.labels.length
   ||defaultModelControls.labels.some(label=>!label)
   ||defaultModelSaved.saved!=='gpt-5.6-luna'

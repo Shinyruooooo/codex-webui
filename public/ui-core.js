@@ -29,6 +29,21 @@ export function selectModelState(models, requestedModel) {
   return { model: selected.model, effort, efforts: efforts.length ? efforts : [effort] };
 }
 
+export function groupModelsByProvider(models) {
+  const groups = [];
+  for (const model of Array.isArray(models) ? models : []) {
+    if (!model) continue;
+    const key = String(model.modelProvider || "openai");
+    let group = groups.find((item) => item.key === key);
+    if (!group) {
+      group = { key, models: [] };
+      groups.push(group);
+    }
+    group.models.push(model);
+  }
+  return groups;
+}
+
 export function defaultModelState(models, storedModel) {
   const catalog = Array.isArray(models) ? models : [];
   const stored = typeof storedModel === "string" ? storedModel : "";

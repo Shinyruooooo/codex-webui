@@ -2,12 +2,11 @@
 
 [简体中文](./README-zh.md)
 
-A browser workspace for Codex CLI, with conversations, project files, and Skills in one place. It connects to the local `codex app-server` and can be used locally or on a trusted LAN.
+A browser workspace for Codex CLI, with conversations, project files, a terminal, and Skills in one place. It connects to the local `codex app-server` and can be used locally or on a trusted LAN.
 
 ## Features
 
-- Three-column workspace with conversations, a file tree, and an on-demand preview / diff panel.
-- Codex runs the commands itself and reports them as command activity in the conversation; the WebUI does not embed a shell of its own.
+- Three-column workspace with conversations, a file tree, and an on-demand preview / terminal / diff panel.
 - Streaming responses, tool activity, command and file-change approvals, model / reasoning-effort selection, and custom Responses-compatible model providers.
 - Session rename, drafts, context compaction, Markdown / JSON export, and running / unread-completion indicators.
 - File previews, uploads, drag-and-drop attachments, and `@` file references.
@@ -17,7 +16,7 @@ A browser workspace for Codex CLI, with conversations, project files, and Skills
 
 ## Install
 
-Requirements: [Bun](https://bun.sh/) 1.3+, Git, and an authenticated Codex CLI. Linux is recommended; Windows has not been fully tested. Tested with Codex CLI `0.162.1`.
+Requirements: [Bun](https://bun.sh/) 1.3+, Node.js 20+, Git, and an authenticated Codex CLI. Linux is recommended; Windows has not been fully tested. Tested with Codex CLI `0.162.1`.
 
 Install and sign in to Codex if needed:
 
@@ -43,12 +42,11 @@ Open **http://127.0.0.1:8899**. No separate frontend build is needed for this co
 2. Choose a model and reasoning effort, then send a message. Review approval requests before allowing commands or file changes.
 3. Use Files to preview or upload files; type `@` to reference a file in your message. Images pasted or attached in the composer stay in the message and are not written into the project folder.
 4. The working directory is shown above the composer and in the New chat tooltip; change it from the empty state, the **Projects** button, or a `?cwd=` URL.
-5. Use Skills to enable or inspect a skill; select it from `/` or `$` autocomplete to attach it to a message.
-6. Open the diff panel when needed. Conversation actions include rename, export, and context compaction.
-7. Drag the right panel's left edge to change its width; the browser remembers it. Double-click the divider to reset, or focus it and use Left/Right arrow keys (Shift for larger steps).
+4. Use Skills to enable or inspect a skill; select it from `/` or `$` autocomplete to attach it to a message.
+5. Open the terminal or diff panel when needed. Conversation actions include rename, export, and context compaction.
+6. Drag the right panel's left edge to change its width; the browser remembers it. Double-click the divider to reset, or focus it and use Left/Right arrow keys (Shift for larger steps).
+7. The terminal header shows connection status. If it stays blank, open **Terminal diagnostics** (ⓘ) and copy the connection/rendering metadata; it does not include commands, output or credentials. **Reconnect terminal** asks for confirmation because it ends that terminal session and its attached programs; it does not restart the WebUI Codex service.
 8. Hover over a user or assistant message to copy its source text/Markdown (controls remain visible on touch devices). Each code block has a top-right copy button for code only, without Markdown fences. Indentation and line breaks are preserved; nothing is executed. If the browser blocks both clipboard methods, select the text and copy manually.
-
-Commands are executed by Codex itself. Use the approval mode in the composer to control when a command or a file change needs your confirmation; the WebUI does not provide a built-in shell.
 
 Personal skill editing/deletion currently requires Linux. Curated Skills installation uses an existing local Codex cache; it does not download a catalog. External skill sources are read-only.
 

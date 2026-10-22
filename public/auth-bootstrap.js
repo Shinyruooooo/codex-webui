@@ -8,7 +8,7 @@ globalThis.__codexWebuiDomI18n=globalThis.__codexWebuiDomI18n||createDomI18n(i18
 const t=message=>i18n.t(message);
 
 async function loadApp(){
-  for(const href of ['/vendor/katex/katex.min.css']){
+  for(const href of ['/vendor/katex/katex.min.css','/vendor/xterm/xterm.css']){
     if(document.querySelector(`link[href="${href}"]`))continue;
     const link=document.createElement('link');link.rel='stylesheet';link.href=href;document.head.append(link);
   }

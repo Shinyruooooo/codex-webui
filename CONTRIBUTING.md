@@ -19,6 +19,7 @@ Security vulnerabilities must be reported privately as described in [SECURITY.md
 Requirements:
 
 - Bun 1.3 or newer
+- Node.js 20 or newer for the PTY worker
 - Git
 - An installed and authenticated Codex CLI for integration tests
 - Chrome, Edge, or Playwright Chromium for browser tests
@@ -80,7 +81,6 @@ bun run build
 - Validate the exact Git root before review patch operations.
 - Map approval decisions to actual app-server response shapes.
 - Do not add endpoints that accept arbitrary commands from an unauthenticated browser.
-- The WebUI has no built-in shell or PTY worker: commands run inside Codex and are reported as command activity. Keep command execution behind the app-server approval flow, and keep the terminal icon and permission profiles that describe it.
 - Preserve localhost-only defaults and authenticated LAN access.
 
 ## Testing
@@ -99,8 +99,6 @@ For browser-facing changes, start the server and run the relevant browser test o
 bun run start
 bun run test:browser
 ```
-
-There is no separate terminal test suite: the built-in terminal was removed, and its browser coverage now lives in the shared suites (`tests/terminal-removal.test.ts` covers the removal itself).
 
 Tests requiring an authenticated Codex installation are separate:
 

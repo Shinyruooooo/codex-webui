@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_TURN_PAGE_SIZE, applyComposerSuggestion, createLatestRequestGate, createTurnWindow, defaultModelState, filterAppModels, formatFileMention, getComposerAutocomplete, resolveComposerPlaceholder, selectModelState } from "../public/ui-core.js";
+import { DEFAULT_TURN_PAGE_SIZE, applyComposerSuggestion, createLatestRequestGate, createTurnWindow, defaultModelState, filterAppModels, formatFileMention, getComposerAutocomplete, groupModelsByProvider, resolveComposerPlaceholder, selectModelState } from "../public/ui-core.js";
 
 describe("conversation turn window", () => {
   test("uses a small default page for fast first paint", () => {
@@ -59,6 +59,20 @@ describe("model selection", () => {
       { model: "gpt-5.5", isDefault: true, defaultReasoningEffort: "medium", supportedReasoningEfforts: [{ reasoningEffort: "medium" }] },
     ];
     expect(selectModelState(models, "removed-model").model).toBe("gpt-5.5");
+  });
+
+  test("groups models by provider and keeps the first-seen provider order", () => {
+    const groups = groupModelsByProvider([
+      { model: "gpt-5.6-sol" },
+      { model: "minimax-m3", modelProvider: "minimax" },
+      { model: "gpt-5.6-luna" },
+      { model: "glm-5.3", modelProvider: "zai" },
+      { model: "minimax-m31", modelProvider: "minimax" },
+    ]);
+    expect(groups.map(group => group.key)).toEqual(["openai", "minimax", "zai"]);
+    expect(groups[0].models.map(model => model.model)).toEqual(["gpt-5.6-sol", "gpt-5.6-luna"]);
+    expect(groups[1].models.map(model => model.model)).toEqual(["minimax-m3", "minimax-m31"]);
+    expect(groupModelsByProvider([])).toEqual([]);
   });
 
   test("keeps a stored default model for new chats and reports when it disappeared", () => {

@@ -511,6 +511,8 @@ body.sidebar-hidden .sidebar{box-shadow:none!important}
 .model-option .model-check{width:16px;height:16px;margin-left:auto;color:var(--app-text-secondary)}
 .model-option-row{display:flex;align-items:center;gap:2px}
 .model-option-row>.model-option{flex:1;min-width:0}
+.model-group-header{padding:6px 12px 4px;border-top:1px solid var(--app-border-default);color:var(--app-text-tertiary);font-size:10px;font-weight:600;letter-spacing:0;text-transform:uppercase}
+.model-group:first-child .model-group-header{border-top:0}
 .model-default-star{width:24px;height:24px;flex:0 0 24px;display:inline-grid;place-items:center;border:0;border-radius:6px;background:transparent;color:var(--app-text-tertiary);cursor:pointer}
 .model-default-star:hover{background:var(--app-hover);color:var(--app-text)}
 .model-default-star:focus-visible{outline:2px solid var(--app-link);outline-offset:2px}

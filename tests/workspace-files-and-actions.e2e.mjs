@@ -147,8 +147,8 @@ try {
     const toggleBox = document.querySelector('#toggleSidebar').getBoundingClientRect();
     const rightBox = document.querySelector('#toggleSidePanel').getBoundingClientRect();
     return {
-      bottomToggleVisible: Boolean(document.querySelector('#toggleBottomPanel') && !document.querySelector('#toggleBottomPanel').hidden),
-      bottomPanelVisible: Boolean(document.querySelector('#bottomPanel') && !document.querySelector('#bottomPanel').hidden),
+      bottomToggleHidden: document.querySelector('#toggleBottomPanel')?.hidden,
+      bottomPanelHidden: document.querySelector('#bottomPanel')?.hidden,
       summaryToggleHidden: document.querySelector('#toggleSummaryPanel')?.hidden,
       dictationHidden: document.querySelector('[data-composer-control="dictation"]')?.hidden,
       sidebarToggleInHeading: Boolean(document.querySelector('.thread-heading #toggleSidebar')),
@@ -161,14 +161,12 @@ try {
       newTabLauncherHidden: document.querySelector('#newTab')?.hidden,
       openSidePanelTabHidden: document.querySelector('#openSidePanelTab')?.hidden,
       hasSidebarTerminalButton: Boolean(document.querySelector('#sidebarTerminalButton')),
-      hasFilesTerminalButton: Boolean(document.querySelector('#filesTerminalButton')),
-      hasTerminalPanel: Boolean(document.querySelector('#sideTerminalPanel,#terminalHost')),
       runtimeSummaryText: document.querySelector('#runtimeTokenSummary')?.textContent?.trim(),
       runtimeDetailsHtml: document.querySelector('#runtimeUsageDetails')?.innerHTML || '',
     };
   });
-  assert.equal(converged.bottomToggleVisible, false);
-  assert.equal(converged.bottomPanelVisible, false);
+  assert.equal(converged.bottomToggleHidden, true);
+  assert.equal(converged.bottomPanelHidden, true);
   assert.equal(converged.summaryToggleHidden, true);
   assert.equal(converged.dictationHidden, true);
   assert.equal(converged.sidebarToggleInHeading, true);
@@ -177,9 +175,7 @@ try {
   assert.equal(converged.sidebarTabs.every(item => item.hasIcon && item.srOnlyText), true);
   assert.equal(converged.newTabLauncherHidden, true);
   assert.equal(converged.openSidePanelTabHidden, true);
-  assert.equal(converged.hasSidebarTerminalButton, false);
-  assert.equal(converged.hasFilesTerminalButton, false);
-  assert.equal(converged.hasTerminalPanel, false);
+  assert.equal(converged.hasSidebarTerminalButton, true);
   assert.ok(converged.runtimeSummaryText?.includes('5h: 80%'));
   assert.ok(converged.runtimeSummaryText?.includes('Weekly: 97%'));
   assert.ok(converged.runtimeDetailsHtml.includes('Remaining quota'));
@@ -268,9 +264,10 @@ try {
   await page.click('#filesUpButton');
   await page.waitForSelector('[data-file-entry-path="README.md"]');
 
-  // The built-in terminal entry points are gone: the file tree keeps its own actions only.
-  assert.equal(await page.locator('#filesTerminalButton').count(), 0);
-  assert.equal(await page.locator('#sidebarTerminalButton').count(), 0);
+  // Opening Terminal from the left sidebar directly opens the right terminal panel.
+  await page.click('#filesTerminalButton');
+  await page.waitForSelector('#sidePanel:not([hidden]) #sideTerminalPanel:not([hidden])');
+  assert.equal(await page.locator('#sidePanelLauncher').isHidden(), true);
   await page.click('[data-file-entry-path="README.md"]');
   await page.waitForSelector('#sidePanel:not([hidden]) #filesPanel:not([hidden])');
 

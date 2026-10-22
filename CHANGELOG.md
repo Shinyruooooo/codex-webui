@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- MiniMax (China) provider preset for the OpenAI Responses endpoint, covering the MiniMax-M3.1-Flash and MiniMax-M3 coding models with their reasoning levels and image input.
+
 ## [0.7.0] - 2026-10-20
 
 ### Added

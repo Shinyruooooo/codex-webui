@@ -283,7 +283,7 @@ function renderProviderCards(){
     const count=provider?providerEnabledCount(provider):0,all=Boolean(provider&&count===provider.models.length);
     const card=document.createElement('article');card.className='provider-preset-card';card.dataset.presetId=preset.id;card.dataset.configured=String(Boolean(provider));
     const button=document.createElement('button');button.type='button';button.className='provider-card-main';button.disabled=providerState.mutationBusy;button.onclick=()=>openProviderEditor(provider||null,preset.id);
-    const icon=document.createElement('span');icon.className='provider-card-icon';icon.setAttribute('aria-hidden','true');icon.textContent=({'zai-cn':'GLM',zai:'Z',deepseek:'DS',custom:'+'})[preset.id]||'AI';
+    const icon=document.createElement('span');icon.className='provider-card-icon';icon.setAttribute('aria-hidden','true');icon.textContent=({'zai-cn':'GLM',zai:'Z',deepseek:'DS',minimax:'MM',custom:'+'})[preset.id]||'AI';
     const copy=document.createElement('span');copy.className='provider-card-copy';const name=document.createElement('strong');name.textContent=t(preset.label);
     const status=document.createElement('small');status.textContent=preset.id==='custom'?t('Configure a Responses endpoint'):provider?`${t('Configured')} · ${count}/${provider.models.length} ${t('Models enabled')}`:t('Not configured');
     copy.append(name,status);button.append(icon,copy);card.append(button);

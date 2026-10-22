@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- A star next to each model in the model picker saves it as the default model for new conversations, matching Pi Web. The default is stored per browser and applies to new chats only; each conversation keeps its own model.
+
 ## [0.7.1] - 2026-10-22
 
 ### Added

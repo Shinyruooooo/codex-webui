@@ -29,6 +29,19 @@ export function selectModelState(models, requestedModel) {
   return { model: selected.model, effort, efforts: efforts.length ? efforts : [effort] };
 }
 
+export function defaultModelState(models, storedModel) {
+  const catalog = Array.isArray(models) ? models : [];
+  const stored = typeof storedModel === "string" ? storedModel : "";
+  const available = Boolean(stored) && catalog.some((item) => item.model === stored);
+  return {
+    stored,
+    available,
+    effective: available
+      ? stored
+      : (catalog.find((item) => item.isDefault)?.model || catalog[0]?.model || ""),
+  };
+}
+
 export function filterAppModels(models) {
   return (Array.isArray(models) ? models : []).filter((model) =>
     Boolean(model?.modelProvider)

@@ -69,6 +69,20 @@ await page.click('#modelSubmenuButton');
 await page.click('#modelMenu .model-option[data-model="gpt-5.6-sol"]');
 await page.click('#modelButton');
 const solEfforts=await page.locator('#modelMenu .model-effort-row').allTextContents();
+// A star next to each model saves it as the default model for new chats.
+await page.click('#modelSubmenuButton');
+const defaultModelControls=await page.evaluate(()=>({
+  stars:document.querySelectorAll('#modelMenu .model-default-star').length,
+  pressed:[...document.querySelectorAll('#modelMenu .model-default-star[aria-pressed="true"]')].map(node=>node.dataset.defaultModel),
+  labels:[...document.querySelectorAll('#modelMenu .model-default-star')].map(node=>node.getAttribute('aria-label')),
+}));
+await page.click('#modelMenu .model-default-star[data-default-model="gpt-5.6-luna"]');
+const defaultModelSaved=await page.evaluate(()=>({saved:localStorage.getItem('codex-webui-model'),toast:document.querySelector('#toast')?.textContent?.trim()||''}));
+await page.click('#modelButton');
+await page.click('#modelSubmenuButton');
+const defaultModelAfter=await page.evaluate(()=>({
+  pressed:[...document.querySelectorAll('#modelMenu .model-default-star[aria-pressed="true"]')].map(node=>node.dataset.defaultModel),
+}));
 await page.keyboard.press('Escape');
 await page.screenshot({path:artifact('composer-native.png'),fullPage:false});
 await page.setViewportSize({width:390,height:844});
@@ -82,10 +96,10 @@ const mobileModel=await page.evaluate(()=>{
     horizontalOverflow:document.documentElement.scrollWidth>innerWidth,
   };
 });
-console.log(JSON.stringify({home,contextUsage,modelFilter,modelMain,effortSelection,modelSubmenu,lunaEfforts,solEfforts,mobileModel,errors},null,2));
+console.log(JSON.stringify({home,contextUsage,modelFilter,modelMain,effortSelection,modelSubmenu,lunaEfforts,solEfforts,defaultModelControls,defaultModelSaved,defaultModelAfter,mobileModel,errors},null,2));
 await browser.close();
 
-const expected=['add','project','approval','model','send'];
+const expected=['add','approval','model','send'];
 if(errors.length
   ||!/^What can I help with in .+\?$/.test(home.heading||'')
   ||home.placeholder!=='Do anything'
@@ -103,6 +117,12 @@ if(errors.length
   ||modelMain.effortRows.length<1
   ||!/Model/i.test(modelMain.modelRow||'')
   ||modelMain.directModelRows!==0
+  ||defaultModelControls.stars!==defaultModelControls.labels.length
+  ||defaultModelControls.labels.some(label=>!label)
+  ||defaultModelSaved.saved!=='gpt-5.6-luna'
+  ||!defaultModelSaved.toast.includes('Default model for new chats')
+  ||defaultModelAfter.pressed.length!==1
+  ||defaultModelAfter.pressed[0]!=='gpt-5.6-luna'
   ||modelMain.width<210||modelMain.width>250
   ||!effortSelection.menuHidden||effortSelection.label!=='High'
   ||modelSubmenu.title!=='Model'

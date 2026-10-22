@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_TURN_PAGE_SIZE, applyComposerSuggestion, createLatestRequestGate, createTurnWindow, filterAppModels, formatFileMention, getComposerAutocomplete, resolveComposerPlaceholder, selectModelState } from "../public/ui-core.js";
+import { DEFAULT_TURN_PAGE_SIZE, applyComposerSuggestion, createLatestRequestGate, createTurnWindow, defaultModelState, filterAppModels, formatFileMention, getComposerAutocomplete, resolveComposerPlaceholder, selectModelState } from "../public/ui-core.js";
 
 describe("conversation turn window", () => {
   test("uses a small default page for fast first paint", () => {
@@ -59,6 +59,16 @@ describe("model selection", () => {
       { model: "gpt-5.5", isDefault: true, defaultReasoningEffort: "medium", supportedReasoningEfforts: [{ reasoningEffort: "medium" }] },
     ];
     expect(selectModelState(models, "removed-model").model).toBe("gpt-5.5");
+  });
+
+  test("keeps a stored default model for new chats and reports when it disappeared", () => {
+    const models = [
+      { model: "gpt-5.6-sol" },
+      { model: "gpt-5.5", isDefault: true },
+    ];
+    expect(defaultModelState(models, "gpt-5.6-sol")).toEqual({ stored: "gpt-5.6-sol", available: true, effective: "gpt-5.6-sol" });
+    expect(defaultModelState(models, "removed-model")).toEqual({ stored: "removed-model", available: false, effective: "gpt-5.5" });
+    expect(defaultModelState(models, "")).toEqual({ stored: "", available: false, effective: "gpt-5.5" });
   });
 });
 

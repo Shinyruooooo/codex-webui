@@ -509,6 +509,13 @@ body.sidebar-hidden .sidebar{box-shadow:none!important}
 .model-option strong{font-size:13px;font-weight:400}
 .model-option small{display:none}
 .model-option .model-check{width:16px;height:16px;margin-left:auto;color:var(--app-text-secondary)}
+.model-option-row{display:flex;align-items:center;gap:2px}
+.model-option-row>.model-option{flex:1;min-width:0}
+.model-default-star{width:24px;height:24px;flex:0 0 24px;display:inline-grid;place-items:center;border:0;border-radius:6px;background:transparent;color:var(--app-text-tertiary);cursor:pointer}
+.model-default-star:hover{background:var(--app-hover);color:var(--app-text)}
+.model-default-star:focus-visible{outline:2px solid var(--app-link);outline-offset:2px}
+.model-default-star[aria-pressed=true]{color:var(--app-link)}
+.model-default-star .icon-slot,.model-default-star .icon-slot svg{width:14px;height:14px;min-width:14px}
 .projectless-option{display:flex;align-items:center;gap:10px;margin:8px 10px 2px;padding:8px 10px;border-radius:8px;color:var(--app-text);text-align:left}
 .projectless-option:hover,.projectless-option.selected{background:var(--app-hover)}
 .projectless-option>.icon-slot{width:16px;height:16px;color:var(--app-text-secondary)}

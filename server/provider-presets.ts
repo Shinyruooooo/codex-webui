@@ -53,6 +53,21 @@ export function providerPresets(): ProviderPreset[] {
         models: [{ id: "deepseek-flash", displayName: "DeepSeek Flash", efforts: ["low", "high", "max"], defaultReasoningEffort: "high", vision: true }],
       },
     },
+    {
+      id: "minimax",
+      label: "MiniMax (China)",
+      description: "Use a MiniMax API key. The Responses endpoint and models are filled in automatically.",
+      docsUrl: "https://platform.minimaxi.com/docs/m-plan/codex",
+      provider: {
+        id: "minimax",
+        name: "MiniMax",
+        baseUrl: "https://api.minimax.cn/v1",
+        models: [
+          { id: "MiniMax-M3.1-Flash", displayName: "MiniMax-M3.1-Flash", efforts: ["low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "max", vision: true },
+          { id: "MiniMax-M3", displayName: "MiniMax-M3", efforts: ["low", "medium", "high", "xhigh", "max"], defaultReasoningEffort: "max", vision: true },
+        ],
+      },
+    },
   ];
 }
 

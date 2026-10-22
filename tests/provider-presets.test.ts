@@ -6,7 +6,7 @@ import { formatProviderModels, matchingProviderPreset, parseProviderModels } fro
 describe("Codex provider presets", () => {
   test("each preset provides a documented Responses endpoint and complete model defaults without a key", () => {
     const presets = providerPresets();
-    expect(presets.map(entry => entry.id)).toEqual(["zai-cn", "zai", "deepseek"]);
+    expect(presets.map(entry => entry.id)).toEqual(["zai-cn", "zai", "deepseek", "minimax"]);
     for (const preset of presets) {
       expect(preset.docsUrl.startsWith("https://")).toBe(true);
       expect(preset.provider.apiKey).toBeUndefined();
@@ -20,6 +20,29 @@ describe("Codex provider presets", () => {
     expect(presets[0].provider.baseUrl).toBe("https://open.bigmodel.cn/api/v1");
     expect(presets[1].provider.baseUrl).toBe("https://api.z.ai/api/v1");
     expect(presets[2].provider.baseUrl).toBe("https://api.deepseek.com");
+    expect(presets[3].provider.baseUrl).toBe("https://api.minimax.cn/v1");
+  });
+
+  test("the MiniMax preset targets the China Responses endpoint with documented models and efforts", () => {
+    const preset = providerPresets().find(entry => entry.id === "minimax")!;
+    expect(preset.provider.id).toBe("minimax");
+    expect(preset.docsUrl).toBe("https://platform.minimaxi.com/docs/m-plan/codex");
+    expect(preset.provider.models.map(model => model.id)).toEqual(["MiniMax-M3.1-Flash", "MiniMax-M3"]);
+    for (const model of preset.provider.models) {
+      expect(model.efforts).toEqual(["low", "medium", "high", "xhigh", "max"]);
+      expect(model.defaultReasoningEffort).toBe("max");
+      expect(model.vision).toBe(true);
+      expect(model.efforts).not.toContain("none");
+    }
+    const raw = providerWithPreset("minimax", { apiKey: "fixture-key" });
+    const [provider] = normalizeProviders({ providers: [raw] });
+    expect(provider.baseUrl).toBe("https://api.minimax.cn/v1");
+    expect(provider.models.map(model => model.id)).toEqual(["MiniMax-M3.1-Flash", "MiniMax-M3"]);
+    const catalog = providerCatalogModels([provider]);
+    expect(catalog.map(entry => entry.model)).toEqual(["MiniMax-M3.1-Flash", "MiniMax-M3"]);
+    expect(catalog[0].inputModalities).toEqual(["text", "image"]);
+    expect(catalog[0].supportedReasoningEfforts.map(entry => entry.reasoningEffort)).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    expect(catalog[0].defaultReasoningEffort).toBe("max");
   });
 
   test("key-only payloads are expanded on the server, not only in the browser", () => {

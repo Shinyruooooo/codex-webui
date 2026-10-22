@@ -277,6 +277,8 @@ Object.assign(ZH_CN, {
   "Use a BigModel Coding Plan key, not a standard model API key. China and international presets update the same GLM provider; choose the region matching your key.": "请使用智谱 Coding Plan 套餐密钥，而非标准 API 密钥。国内和国际预设更新同一个 GLM 提供商，请选择与密钥对应的地区。",
   "Use a Z.AI Coding Plan key for the international endpoint. China and international presets update the same GLM provider; choose the region matching your key.": "请使用 Z.AI Coding Plan 国际版密钥。国内和国际预设更新同一个 GLM 提供商，请选择与密钥对应的地区。",
   "Use a DeepSeek API key. The Responses endpoint and model are filled in automatically.": "填写 DeepSeek API 密钥即可，Responses 端点和模型会自动配置。",
+  "MiniMax (China)": "MiniMax（国内）",
+  "Use a MiniMax API key. The Responses endpoint and models are filled in automatically.": "填写 MiniMax API 密钥即可，Responses 端点和模型会自动配置。",
   "An API key is required for this provider preset": "此服务商预设需要填写 API 密钥",
   "Enter a new API key when changing the provider endpoint": "更改服务商端点时，请重新填写对应的 API 密钥",
   "Unknown provider preset": "未知的服务商预设",

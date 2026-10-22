@@ -214,7 +214,7 @@ try {
 
   // Built-in presets: selecting the vendor fills every field; only the key
   // needs typing. Changing vendors must never carry a secret to another URL.
-  assert.equal(await page.locator('.provider-preset-card').count(), 4);
+  assert.equal(await page.locator('.provider-preset-card').count(), 5);
   assert.ok(await page.locator('[data-preset-id="zai-cn"] input[role="switch"]').isDisabled());
   await page.click('[data-preset-id="zai-cn"] .provider-card-main');
   assert.equal(await page.locator('#providerPresetSelect').count(), 0, 'provider dropdown was removed, not merely hidden');
@@ -227,6 +227,15 @@ try {
   assert.equal(await page.inputValue('#providerIdInput'), 'deepseek');
   assert.equal(await page.inputValue('#providerBaseUrlInput'), 'https://api.deepseek.com');
   assert.ok((await page.inputValue('#providerModelsInput')).includes('deepseek-flash'));
+  await page.click('[data-preset-id="minimax"] .provider-card-main');
+  assert.equal(await page.inputValue('#providerApiKeyInput'), '');
+  assert.equal(await page.inputValue('#providerIdInput'), 'minimax');
+  assert.equal(await page.inputValue('#providerBaseUrlInput'), 'https://api.minimax.cn/v1');
+  const minimaxModels = await page.inputValue('#providerModelsInput');
+  assert.ok(minimaxModels.includes('MiniMax-M3.1-Flash'));
+  assert.ok(minimaxModels.includes('MiniMax-M3'));
+  assert.ok(minimaxModels.includes('xhigh'));
+  await page.click('[data-preset-id="zai-cn"] .provider-card-main');
   await page.click('[data-preset-id="zai-cn"] .provider-card-main');
   await page.fill('#providerApiKeyInput', 'e2e-glm-key');
   let releaseSave, requestArrived, saveCount = 0;

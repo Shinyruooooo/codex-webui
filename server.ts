@@ -69,7 +69,7 @@ import {
   toPublicAccountIdentity,
 } from "./server/profile-service.ts";
 
-const APP_VERSION = "0.7.1";
+const APP_VERSION = "0.8.0";
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 8899);
 const accessToken = process.env.CODEX_WEBUI_ACCESS_TOKEN || null;

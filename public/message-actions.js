@@ -124,6 +124,7 @@ function currentText(getText) {
 export function createMessageActions({ translate = (value) => value, onCopyResult = () => {}, copyText = copyTextToClipboard } = {}) {
   const messageActions = new WeakMap();
   const retryActions = new WeakMap();
+  const forkActions = new WeakMap();
   const codeActions = new WeakMap();
   const buttonStates = new WeakMap();
 
@@ -149,6 +150,7 @@ export function createMessageActions({ translate = (value) => value, onCopyResul
       const state = buttonStates.get(button);
       if (state) setButtonLabel(button, state.copied ? "Copied" : state.copyLabel);
       if (button.classList?.contains("message-retry-button")) refreshRetryLabel(button);
+      if (button.classList?.contains("message-fork-button")) refreshForkLabel(button);
     }
   }
 
@@ -250,6 +252,45 @@ export function createMessageActions({ translate = (value) => value, onCopyResul
     refreshRetryLabel(record.button);
   }
 
+  function updateMessageFork(root, options = {}) {
+    if (!root || typeof root.appendChild !== "function") return;
+    const visible = options.visible === true;
+    const disabled = options.disabled === true;
+    let record = forkActions.get(root);
+    if (!record) {
+      const ownerDocument = root.ownerDocument;
+      const container = ownerDocument.createElement("div");
+      container.className = "message-fork-actions";
+      const button = ownerDocument.createElement("button");
+      button.type = "button";
+      button.className = "message-fork-button";
+      button.dataset.i18nUi = "Fork from here";
+      button.append(makeIcon(ownerDocument, "gitBranch"));
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (button.disabled) return;
+        try { record.onFork?.(); } catch {}
+      });
+      container.append(button);
+      const message = root.querySelector(":scope > .user-message");
+      if (message) message.after(container);
+      else root.appendChild(container);
+      record = { container, button, onFork: null };
+      forkActions.set(root, record);
+    }
+    record.onFork = typeof options.onFork === "function" ? options.onFork : null;
+    record.container.hidden = !visible;
+    record.button.disabled = disabled;
+    refreshForkLabel(record.button);
+  }
+
+  function refreshForkLabel(button) {
+    const label = safeTranslate(translate, "Fork from here");
+    button.title = label;
+    button.setAttribute("aria-label", label);
+  }
+
   function updateMessageCopy(root, getText) {
     if (!root || typeof root.appendChild !== "function" || typeof getText !== "function") return;
     let record = messageActions.get(root);
@@ -300,5 +341,5 @@ export function createMessageActions({ translate = (value) => value, onCopyResul
     }
   }
 
-  return { updateMessageCopy, updateMessageRetry, enhanceCodeBlocks, refreshLabels };
+  return { updateMessageCopy, updateMessageRetry, updateMessageFork, enhanceCodeBlocks, refreshLabels };
 }

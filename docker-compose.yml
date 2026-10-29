@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: codex-webui-lezi-fun:local
-    container_name: codex-webui-lezi-fun
+    image: codex-webui:local
+    container_name: codex-webui
     restart: unless-stopped
     user: "${PUID:-1000}:${PGID:-1000}"
     working_dir: /app

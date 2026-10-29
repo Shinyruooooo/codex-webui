@@ -205,6 +205,57 @@ export function formatThreadExportMarkdown(thread = {}, { title = "", tokenUsage
   return lines.join("\n").trimEnd() + "\n";
 }
 
+export const ARCHIVED_THREADS_STORAGE_KEY = "codex-webui-archived-threads";
+const ARCHIVED_THREADS_LIMIT = 200;
+
+function resolveArchiveStorage(storage) {
+  if (storage !== undefined) return storage;
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function readArchivedThreads(storage = undefined) {
+  try {
+    const raw = resolveArchiveStorage(storage)?.getItem(ARCHIVED_THREADS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry) => entry && typeof entry === "object" && typeof entry.id === "string" && entry.id)
+      .map((entry) => ({
+        id: entry.id,
+        name: typeof entry.name === "string" ? entry.name : "",
+        cwd: typeof entry.cwd === "string" ? entry.cwd : "",
+        archivedAt: Number.isFinite(entry.archivedAt) ? entry.archivedAt : 0,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+export function writeArchivedThreads(entries = [], storage = undefined) {
+  const list = (Array.isArray(entries) ? entries : [])
+    .filter((entry) => entry && typeof entry === "object" && typeof entry.id === "string" && entry.id)
+    .slice(0, ARCHIVED_THREADS_LIMIT)
+    .map((entry) => ({
+      id: entry.id,
+      name: typeof entry.name === "string" ? entry.name : "",
+      cwd: typeof entry.cwd === "string" ? entry.cwd : "",
+      archivedAt: Number.isFinite(entry.archivedAt) ? entry.archivedAt : 0,
+    }));
+  try {
+    const target = resolveArchiveStorage(storage);
+    if (!target) return;
+    if (list.length) target.setItem(ARCHIVED_THREADS_STORAGE_KEY, JSON.stringify(list));
+    else target.removeItem(ARCHIVED_THREADS_STORAGE_KEY);
+  } catch {
+    // Archived bookkeeping is best-effort; the server-side archive state is authoritative.
+  }
+}
+
 export function exportFilename(title = "conversation", extension = "md") {
   const slug = String(title || "conversation")
     .normalize("NFKD")

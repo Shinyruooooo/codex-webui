@@ -15,6 +15,9 @@ const BROWSER_RPC_METHODS = new Set([
   "thread/read",
   "thread/delete",
   "thread/name/set",
+  "thread/fork",
+  "thread/archive",
+  "thread/unarchive",
   "thread/compact/start",
   "thread/resume",
   "thread/turns/list",
@@ -135,6 +138,20 @@ function isLoopbackHost(hostHeader) {
 
 function isSameOrigin(origin, hostHeader) {
   if (!origin) return true;
+  try { return new URL(origin).host.toLowerCase() === String(hostHeader || "").toLowerCase(); }
+  catch { return false; }
+}
+
+/**
+ * Password setup is a one-shot claim on this deployment, so only requests that
+ * provably come from the operator's own browser (or a local client) may set it.
+ * A request without an Origin header is treated as untrusted: non-browser
+ * clients on the LAN could otherwise claim the password before the operator.
+ */
+export function isTrustedPasswordSetupRequest({ origin = null, hostHeader = null, remoteAddress = null, forwardedFor = null, forwarded = null, realIp = null } = {}) {
+  if (forwardedFor || forwarded || realIp) return false;
+  if (isLoopbackAddress(remoteAddress) && isLoopbackHost(hostHeader)) return true;
+  if (!origin) return false;
   try { return new URL(origin).host.toLowerCase() === String(hostHeader || "").toLowerCase(); }
   catch { return false; }
 }

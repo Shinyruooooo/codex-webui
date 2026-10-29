@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { JSDOM } from "jsdom";
+import createDOMPurify from "dompurify";
 import { agentMessageText, isImageReference, itemImageReferences, localDownloadUrl, localImageUrl, parseFileReference, renderAssistantMarkdown, renderItemImages } from "../public/rendering.js";
 
 describe("assistant Markdown and LaTeX rendering", () => {
@@ -29,6 +31,49 @@ describe("assistant Markdown and LaTeX rendering", () => {
     expect(html).not.toContain("<script");
     expect(html).not.toContain("javascript:");
     expect(html).toContain("&lt;script&gt;");
+  });
+
+  test("blocks entity encoded javascript links in the regex fallback", () => {
+    for (const source of [
+      '<a href="&#106;avascript:alert(1)">first</a>',
+      '<a href="java&#115;cript:alert(1)">second</a>',
+      '<a href="java&Tab;script:alert(1)">third</a>',
+    ]) {
+      const html = renderAssistantMarkdown(source);
+      expect(html).not.toContain("avascript:");
+      expect(html).not.toContain("script:");
+      expect(html).toContain('href="#"');
+    }
+  });
+
+  test("keeps normal markdown rendering intact in the regex fallback", () => {
+    const html = renderAssistantMarkdown("## Result\n\n- one\n- two\n\n[docs](https://example.com/docs)");
+    expect(html).toContain("<h2>Result</h2>");
+    expect(html).toContain('href="https://example.com/docs"');
+    expect(html).not.toContain('href="#"');
+  });
+
+  test("blocks entity encoded javascript links when DOMPurify is available", () => {
+    const dom = new JSDOM("");
+    const previous = globalThis.DOMPurify;
+    globalThis.DOMPurify = createDOMPurify(dom.window);
+    try {
+      for (const source of [
+        '<a href="&#106;avascript:alert(1)">first</a>',
+        '<a href="java&#115;cript:alert(1)">second</a>',
+        '<a href="java&Tab;script:alert(1)">third</a>',
+      ]) {
+        const html = renderAssistantMarkdown(source);
+        expect(html).not.toContain("avascript:");
+        expect(html).not.toContain("script:");
+      }
+      const safe = renderAssistantMarkdown("## Result\n\n- one\n\n[docs](https://example.com/docs)");
+      expect(safe).toContain("<h2>Result</h2>");
+      expect(safe).toContain('href="https://example.com/docs"');
+    } finally {
+      if (previous === undefined) delete globalThis.DOMPurify;
+      else globalThis.DOMPurify = previous;
+    }
   });
 
   test("keeps dollar amounts as text rather than math", () => {

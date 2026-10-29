@@ -142,6 +142,12 @@ describe("workspace uploads", () => {
       expect(() => saveWorkspaceUpload({ ...opts, filename: "safe.txt", directory: ".git" })).toThrow(/\.git/);
       expect(() => saveWorkspaceUpload({ ...opts, cwd: join(cwd, ".git"), filename: "safe.txt" })).toThrow(/\.git/);
       expect(() => saveWorkspaceUpload({ ...opts, filename: "safe.txt", allowedRoots: [join(cwd, ".git")] })).toThrow();
+      for (const filename of [".env", ".bashrc", "id_rsa", "server.pem", "private.key"]) {
+        expect(() => saveWorkspaceUpload({ ...opts, filename })).toThrow(/not allowed/i);
+      }
+      expect(() => saveWorkspaceUpload({ ...opts, filename: "../../x" })).toThrow();
+      mkdirSync(join(cwd, ".ssh"));
+      expect(() => saveWorkspaceUpload({ ...opts, filename: "authorized_keys", directory: ".ssh" })).toThrow(/not allowed/i);
     } finally { cleanup(); }
   });
 });

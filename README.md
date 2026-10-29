@@ -16,7 +16,7 @@ A browser workspace for Codex CLI, with conversations, project files, a terminal
 
 ## Install
 
-Requirements: [Bun](https://bun.sh/) 1.3+, Node.js 20+, Git, and an authenticated Codex account. Linux is recommended; Windows has not been fully tested. Tested with Codex CLI `0.162.1`.
+Requirements: [Bun](https://bun.sh/) 1.3+, Node.js 20+, Git, and an authenticated Codex account. Linux is recommended; Windows has not been fully tested. Tested with Codex CLI `0.164.0`.
 
 Install Codex if needed:
 
@@ -43,11 +43,11 @@ Open **http://127.0.0.1:8899**. No separate frontend build is needed for this co
 2. Choose a model and reasoning effort, then send a message. Review approval requests before allowing commands or file changes.
 3. Use Files to preview or upload files; type `@` to reference a file in your message. Images pasted or attached in the composer stay in the message and are not written into the project folder.
 4. The working directory is shown above the composer and in the New chat tooltip; change it from the empty state, the **Projects** button, or a `?cwd=` URL.
-4. Use Skills to enable or inspect a skill; select it from `/` or `$` autocomplete to attach it to a message.
-5. Open the terminal or diff panel when needed. Conversation actions include rename, export, and context compaction.
-6. Drag the right panel's left edge to change its width; the browser remembers it. Double-click the divider to reset, or focus it and use Left/Right arrow keys (Shift for larger steps).
-7. The terminal header shows connection status. If it stays blank, open **Terminal diagnostics** (ⓘ) and copy the connection/rendering metadata; it does not include commands, output or credentials. **Reconnect terminal** asks for confirmation because it ends that terminal session and its attached programs; it does not restart the WebUI Codex service.
-8. Hover over a user or assistant message to copy its source text/Markdown (controls remain visible on touch devices). Each code block has a top-right copy button for code only, without Markdown fences. Indentation and line breaks are preserved; nothing is executed. If the browser blocks both clipboard methods, select the text and copy manually.
+5. Use Skills to enable or inspect a skill; select it from `/` or `$` autocomplete to attach it to a message.
+6. Open the terminal or diff panel when needed. Conversation actions include rename, export, and context compaction.
+7. Drag the right panel's left edge to change its width; the browser remembers it. Double-click the divider to reset, or focus it and use Left/Right arrow keys (Shift for larger steps).
+8. The terminal header shows connection status. If it stays blank, open **Terminal diagnostics** (ⓘ) and copy the connection/rendering metadata; it does not include commands, output or credentials. **Reconnect terminal** asks for confirmation because it ends that terminal session and its attached programs; it does not restart the WebUI Codex service.
+9. Hover over a user or assistant message to copy its source text/Markdown (controls remain visible on touch devices). Each code block has a top-right copy button for code only, without Markdown fences. Indentation and line breaks are preserved; nothing is executed. If the browser blocks both clipboard methods, select the text and copy manually.
 
 Personal skill editing/deletion currently requires Linux. Curated Skills installation uses an existing local Codex cache; it does not download a catalog. External skill sources are read-only.
 
@@ -60,9 +60,19 @@ Personal skill editing/deletion currently requires Linux. Curated Skills install
 | `CODEX_WEBUI_CWD` | Repository directory | Initial project directory |
 | `CODEX_WEBUI_REVIEW_ROOT` | Initial project directory | Git root allowed for diff Undo/Reapply |
 | `CODEX_WEBUI_PASSWORD` | Unset | LAN browser login password |
+| `CODEX_WEBUI_ACCESS_TOKEN` | Unset | Bearer/Basic access token, useful behind a reverse proxy |
+| `CODEX_WEBUI_PROJECTLESS` | Unset | Run in projectless mode (requires `CODEX_WEBUI_REVIEW_ROOT`) |
+| `CODEX_WEBUI_NTFY_TOPIC` | Unset | ntfy topic that receives task-completion pushes (set `CODEX_WEBUI_NTFY_URL`, default `https://ntfy.sh`) |
 | `CODEX_WEBUI_MODELS_JSON` | `$CODEX_HOME/codex-webui-models.json` | Custom model provider store |
 
 For example, change the port with `PORT=9000 bun run start`. More options are listed in [.env.example](./.env.example); replace example paths before using them.
+
+The first-run LAN password setup must come from a same-origin browser request: a reverse proxy in front of the WebUI must not pass through `X-Forwarded-For`/`Forwarded`/`X-Real-IP` during setup, or the setup request is rejected. Set the password over a direct localhost connection in that case.
+
+### Docker
+
+`docker-compose.yml` builds and runs the WebUI in a container. Before starting it, set `CODEX_BIN` to the Codex executable path and `CODEX_WEBUI_REVIEW_ROOT` to the Git root allowed for reviews.
+The Compose service runs in projectless mode by default (`CODEX_WEBUI_PROJECTLESS=true`), so no project folder has to be selected in the UI.
 
 ### Custom model providers
 

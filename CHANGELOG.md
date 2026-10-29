@@ -8,9 +8,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-30
+
+### Added
+- **Session forking**: hover any user message and use **Fork from here** to create an independent session that keeps everything up to and including that message; the conversation menu's **Duplicate session** forks the whole thread. Forked sessions open immediately and carry their source's configuration. Powered by the app-server `thread/fork` API.
+- **Session archive**: **Archive thread** hides a session from the list (`thread/archive`); archived sessions are listed in a collapsible **Archived** group at the bottom of the sidebar and can be restored (`thread/unarchive`) or deleted from there. Restoration bookkeeping is kept in the browser, since the app-server hides archived threads from `thread/list`.
+- A CI workflow (`.github/workflows/ci.yml`) runs the unit suite, the compile check and `git diff --check` on every push to `dev`/`main` and on pull requests.
+- A Docker section in the READMEs documents the compose variables (`CODEX_BIN`, `CODEX_WEBUI_REVIEW_ROOT`, projectless mode); `.env.example` now documents `CODEX_WEBUI_PROJECTLESS` and `CODEX_WEBUI_NODE`, and the configuration tables list `CODEX_WEBUI_ACCESS_TOKEN` and the `CODEX_WEBUI_NTFY_TOPIC` / `CODEX_WEBUI_NTFY_URL` completion-push pair.
+
 ### Fixed
 - The sign-in dialog copies the device code with the fallback that also works on plain HTTP, where the native clipboard API is unavailable, and the copy button now reads "Copied" after a successful copy.
 - A finished sign-in now updates the interface even when the completion notification is missed. The open sign-in polls the sign-in state, so a suspended browser tab or a dropped bridge connection no longer leaves the dialog waiting with "not signed in". The bridge restarts after the notification was sent, so the browser sees the result before the restart.
+- **XSS in Markdown rendering**: the interface now loads the declared DOMPurify dependency and sanitizes all rendered Markdown with it. Previously the sanitizer silently fell back to a regex filter that entity-encoded `javascript:` URLs (for example `&#106;avascript:`) could bypass in model output, file previews and skill descriptions. The no-DOM fallback now decodes entities before checking URL schemes.
+- **LAN password-setup hijack**: `/api/auth/setup` accepted requests without an `Origin` header from any LAN client, so a non-browser client could claim the initial password before the owner. Setup now requires a same-origin request or a loopback connection.
+- **Sensitive file exposure**: the file preview, download, image and upload endpoints resolve paths inside the whole home directory, which allowed reading `~/.codex/auth.json` or `~/.ssh/id_rsa` and uploading into `~/.ssh`. Paths containing `.ssh`/`.aws`/`.gnupg`/`.codex`, `.env*` files, and private-key material (`id_rsa*`, `*.pem`, `*.key`, `*.p12`) are now rejected for reads and writes, and dot-prefixed upload filenames are refused.
+- **Browser RPC parameter injection**: `thread/start` and `turn/start` now strip unknown `config` keys (only `model`, `model_provider`, `approvalPolicy` and `sandbox` pass through), and `skills/config/write` carries only `path` and `enabled`.
+- Composer autocomplete no longer swallows Enter/Tab when the menu has no selectable items, so messages send normally after `@` or `/`.
+- The WebSocket connect-fallback timer is cleared on `open`, so in-flight requests are no longer rejected when the first bridge message is slow.
+- The terminal follows the selected light/dark theme instead of freezing on the system preference at creation time.
+- Composer draft saves and `@` file search are debounced, and stale `@` search responses are cancelled instead of racing.
+- Session-runtime maps (turn payloads, statuses, token usage, inline images) are bounded and cleaned when switching conversations.
+- Global shortcuts (⌘K/⌘B/⌘J) no longer fire while typing in inputs, and the shortcuts page matches the actual ⌘J behavior (open terminal).
+- Model-provider and folder-browsing responses from an older request can no longer overwrite newer state.
+- The app-server bridge restarts with exponential backoff (up to 30 s) after a crash instead of respawning every second.
+- `thread/started` notifications no longer duplicate a session that local code already inserted.
+- Integration test `loads models and threads from the real Codex app-server` no longer depends on pre-existing host sessions: it starts a real turn and asserts the thread appears in `thread/list`.
+
+### Changed
+- Setup responses no longer rewrite the session secret when the password file already exists, keeping environment-provided credentials authoritative.
+- The bare `/tmp` directory is no longer an allowed root for file and image access; the per-user temp dir remains available.
+- Docker image/container names in `docker-compose.yml` use `codex-webui` instead of the upstream `codex-webui-lezi-fun`; `.dockerignore` excludes local runtime state.
+- The security-advisory link in the issue template points to this repository instead of the upstream fork.
+- Documented Codex CLI version updated to 0.164.0.
+
+### Notes
+- Archived-session bookkeeping is browser-local. Clearing site data loses the list of archived sessions; they remain recoverable with `codex unarchive <id>`.
 
 ## [0.9.1] - 2026-10-29
 

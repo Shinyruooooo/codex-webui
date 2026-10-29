@@ -1084,3 +1084,19 @@ body.resizing-right-panel iframe{pointer-events:none}
 .login-verify a{color:var(--app-link);font-size:12px}
 .login-status{font-size:11px}
 .login-actions{display:flex;justify-content:flex-end;gap:8px;padding:11px 14px;border-top:1px solid var(--app-border)}
+
+/* v1.0.0: fork-from-message action */
+.message-fork-actions{display:inline-flex;flex:0 0 auto;align-items:center;margin:0}
+.message-fork-actions[hidden]{display:none}
+.message-fork-button{width:22px;height:22px;display:inline-grid;place-items:center;padding:0;border:0;border-radius:999px;background:transparent;color:var(--app-text-tertiary);cursor:pointer}
+.message-fork-button:hover:not(:disabled),.message-fork-button:focus-visible{background:var(--app-hover);color:var(--app-text)}
+.message-fork-button:focus-visible{outline:2px solid var(--app-link);outline-offset:2px}
+.message-fork-button:disabled{opacity:.45;cursor:default}
+.message-fork-button .icon-slot,.message-fork-button .icon-slot svg{width:14px;height:14px;min-width:14px}
+
+/* v1.0.0: archived sessions section in the sidebar */
+.sidebar-archived-group{margin-top:8px;border-top:.5px solid color-mix(in srgb,var(--app-border) 70%,transparent);padding-top:8px}
+.thread-archived-action{display:flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 22px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--app-text-secondary);opacity:0;cursor:pointer}
+.sidebar-archived-item:hover .thread-archived-action,.sidebar-archived-item:focus-within .thread-archived-action{opacity:1}
+.thread-archived-action:hover,.thread-archived-action:focus-visible{background:var(--app-hover);color:var(--app-text)}
+.thread-archived-action .icon-slot,.thread-archived-action svg{width:14px;height:14px}

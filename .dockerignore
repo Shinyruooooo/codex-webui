@@ -7,3 +7,9 @@ public/app.bundle.js
 .env
 .env.*
 !.env.example
+.runtime/
+.artifacts/
+.state/
+workspace/
+tests/
+docs/

@@ -2,11 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  BUILTIN_PROVIDER_CHANNEL,
   loadProvidersConfig,
   assertProviderModelEnabled,
   mergeCustomModels,
   normalizeProviders,
   providerCatalogModels,
+  providerChannel,
   providerConfigArgs,
   providerEnvKey,
   providerForModel,
@@ -133,6 +135,22 @@ describe("model catalog integration", () => {
     expect(providerForModel(providers, "glm-5.3")).toBe("zai");
     expect(providerForModel(providers, "gpt-6.1-sol")).toBeNull();
     expect(providerForModel(providers, 42)).toBeNull();
+  });
+
+  test("maps provider ids to the channel a chat may switch models inside", () => {
+    const providers = normalizeProviders({ providers: [validProvider] });
+    // Managed providers keep their own channel.
+    expect(providerChannel("zai", providers, "openai")).toBe("zai");
+    // The effective default provider owns the built-in catalog, whether it is
+    // spelled "openai" or aliased ("chatgpt-http").
+    expect(providerChannel("openai", providers, "openai")).toBe(BUILTIN_PROVIDER_CHANNEL);
+    expect(providerChannel("chatgpt-http", providers, "chatgpt-http")).toBe(BUILTIN_PROVIDER_CHANNEL);
+    expect(providerChannel("chatgpt-http", providers, "openai")).toBe("chatgpt-http");
+    // Other providers stay exclusive.
+    expect(providerChannel("oss", providers, "chatgpt-http")).toBe("oss");
+    // An unknown default provider keeps the checks permissive.
+    expect(providerChannel("chatgpt-http", providers, null)).toBe(BUILTIN_PROVIDER_CHANNEL);
+    expect(providerChannel(undefined, providers, "openai")).toBe(BUILTIN_PROVIDER_CHANNEL);
   });
 });
 

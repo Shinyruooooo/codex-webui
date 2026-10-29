@@ -258,7 +258,6 @@ function setProviderMutationBusy(busy){
   for(const control of document.querySelectorAll('#providerRows button,#providerRows input,#providerPresetCards button,#providerPresetCards input,#providerAddButton,#providerSaveButton,#providerCancelButton'))control.disabled=busy||control.dataset.unconfigured==='true';
   $('#providerRefreshAllButton').disabled=busy||!providerState.providers.length;
 }
-function modelProviderOf(id){const entry=state.models.find(model=>model.model===id);return entry?.modelProvider||null}
 async function refreshModels(){try{const result=await rpc('model/list',{limit:50});state.models=filterAppModels(result?.data||[]);renderModels()}catch(error){if(!error?.silentTransportSwitch)toast(error.message)}}
 async function waitForCodexBridge(timeout=20000){const started=Date.now();let sawDisconnect=false;for(;;){try{const response=await fetch('/api/health',{cache:'no-store'}),body=await response.json();if(!body.codex)sawDisconnect=true;if(body.codex&&(sawDisconnect||Date.now()-started>1500))return}catch{}if(Date.now()-started>timeout)throw new Error(t('Codex bridge did not reconnect'));await new Promise(resolve=>setTimeout(resolve,250))}}
 async function loadModelProviders(){
@@ -396,7 +395,7 @@ function renderModels(){
 }
 function defaultModelId(){return localStorage.getItem('codex-webui-model')||''}
 function setDefaultModel(model){if(!model||!state.models.some(entry=>entry.model===model))return;localStorage.setItem('codex-webui-model',model);chooseModel(model);toast(t('Default model for new chats: {model}',{model:modelDisplay(selectedModel())}))}
-function chooseModel(model,keepOpen=false){const previous=$('#effortSelect').value,previousModel=state.selectedModel;state.selectedModel=model;if(state.active?.id){const previousProvider=modelProviderOf(previousModel),nextProvider=modelProviderOf(model);if(previousProvider!==nextProvider)toast(t('Switching provider requires a new chat'));const settings=threadSettings(state.active.id);updateEfforts(settings.efforts?.[model]);saveActiveThreadSettings()}else{localStorage.setItem('codex-webui-model',model);updateEfforts(previous)}syncModelLabel();if(keepOpen)renderModelMenuMain();else closeModelMenu();toast(`Model: ${modelDisplay(selectedModel())}`)}
+function chooseModel(model,keepOpen=false){const previous=$('#effortSelect').value;state.selectedModel=model;if(state.active?.id){const settings=threadSettings(state.active.id);updateEfforts(settings.efforts?.[model]);saveActiveThreadSettings()}else{localStorage.setItem('codex-webui-model',model);updateEfforts(previous)}syncModelLabel();if(keepOpen)renderModelMenuMain();else closeModelMenu();toast(`Model: ${modelDisplay(selectedModel())}`)}
 function syncModelLabel(){const model=selectedModel();$('#modelLabel').textContent=modelDisplay(model,true);$('#effortLabel').textContent=reasoningLabel($('#effortSelect').value)}
 function updateEfforts(preferred){
   const model=selectedModel(),effort=$('#effortSelect');effort.innerHTML='';

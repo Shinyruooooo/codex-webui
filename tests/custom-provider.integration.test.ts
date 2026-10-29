@@ -204,7 +204,7 @@ describe("custom model providers", () => {
     expect(payload.providers[0].id).toBe("mock");
     expect(payload.providers[0].baseUrl).toBe(`http://127.0.0.1:${mockPort}/v1`);
     expect(payload.providers[0].hasApiKey).toBe(true);
-    expect(payload.presets.map((preset: any) => preset.id)).toEqual(["zai-cn", "zai", "deepseek"]);
+    expect(payload.presets.map((preset: any) => preset.id)).toEqual(["zai-cn", "zai", "deepseek", "minimax"]);
     expect(payload.presets.every((preset: any) => preset.provider.apiKey === undefined)).toBe(true);
     expect(JSON.stringify(payload)).not.toContain("test-key-123");
   }, 15_000);
@@ -258,7 +258,7 @@ describe("custom model providers", () => {
     expect(assistantText).toContain(MOCK_REPLY);
   }, 45_000);
 
-  test("rejects turns that switch to a model from another provider", async () => {
+  test("allows a turn to switch from a custom provider to a built-in model", async () => {
     const started = await rpc("thread/start", {
       cwd: ROOT,
       model: "mock-model",
@@ -268,11 +268,12 @@ describe("custom model providers", () => {
     });
     const threadId = started?.thread?.id;
     expect(typeof threadId).toBe("string");
-    await expect(rpc("turn/start", {
+    const turn = await rpc("turn/start", {
       threadId,
       input: [{ type: "text", text: "hi" }],
       model: "gpt-6.1-sol",
-    })).rejects.toThrow(/start a new chat/i);
+    });
+    expect(turn?.turn?.id || turn?.turnId).toBeTruthy();
   }, 15_000);
 
   test("saves, restarts the bridge and serves the updated catalog", async () => {

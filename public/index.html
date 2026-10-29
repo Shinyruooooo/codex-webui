@@ -373,7 +373,7 @@
       <section class="settings-page" data-settings-content="providers" hidden>
         <header class="settings-page-heading"><button class="settings-mobile-back icon-button" type="button" aria-label="Back to settings"><span class="icon-slot" data-icon="chevronLeft"></span></button><h1>Model providers</h1></header>
         <div class="settings-section-title">Custom model providers</div>
-        <div class="settings-row settings-readonly-row"><span><strong>Responses-compatible APIs</strong><small id="providersIntro">Third-party endpoints that implement the OpenAI Responses API. Switching provider requires a new chat.</small></span></div>
+        <div class="settings-row settings-readonly-row"><span><strong>Responses-compatible APIs</strong><small id="providersIntro">Third-party endpoints that implement the OpenAI Responses API. Each turn uses the provider that owns the selected model.</small></span></div>
         <div class="provider-presets-grid" id="providerPresetCards" aria-label="Provider presets"></div>
         <div class="provider-catalog-toolbar"><span class="settings-section-title">Configured providers</span><button class="files-action-button" id="providerRefreshAllButton" type="button">Refresh model catalogs</button></div>
         <p class="provider-catalog-note">Switches control the model picker, not credentials. Turning models off keeps the keys and does not interrupt running turns.</p>

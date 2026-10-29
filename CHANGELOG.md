@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- Sign in with a ChatGPT account from the WebUI: **Settings → Profile → Log in with ChatGPT** starts a device-code sign-in through the Codex bridge, shows the one-time code and the verification page, and reports the result when Codex completes it. The flow works on a headless server and from any browser, so a CLI sign-in is no longer required first. The sign-in writes the same credential store as `codex login`, and the bridge restarts afterwards so the new account is used immediately.
+
 ## [0.8.0] - 2026-10-29
 
 ### Added

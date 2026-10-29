@@ -16,14 +16,15 @@ A browser workspace for Codex CLI, with conversations, project files, a terminal
 
 ## Install
 
-Requirements: [Bun](https://bun.sh/) 1.3+, Node.js 20+, Git, and an authenticated Codex CLI. Linux is recommended; Windows has not been fully tested. Tested with Codex CLI `0.162.1`.
+Requirements: [Bun](https://bun.sh/) 1.3+, Node.js 20+, Git, and an authenticated Codex account. Linux is recommended; Windows has not been fully tested. Tested with Codex CLI `0.162.1`.
 
-Install and sign in to Codex if needed:
+Install Codex if needed:
 
 ```bash
 npm install -g @openai/codex
-codex login
 ```
+
+You can sign in with your ChatGPT account from the WebUI: open **Settings → Profile**, choose **Log in with ChatGPT**, and enter the one-time code on the verification page. The WebUI starts a device-code sign-in through the Codex bridge, so it works on a headless server and from any browser. `codex login` remains available and writes the same credential store, so the CLI picks up the account as well. Signing in replaces the account this service uses, so treat the WebUI password as the access boundary for that account.
 
 Install and start the WebUI:
 

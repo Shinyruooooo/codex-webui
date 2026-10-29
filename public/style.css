@@ -1065,3 +1065,22 @@ body.resizing-right-panel iframe{pointer-events:none}
 :root[data-theme=light] .approval-primary:hover:not(:disabled){background:color-mix(in srgb,var(--app-text) 88%,transparent)!important}
 :root[data-theme=light] .approval-menu-toggle{border-left-color:color-mix(in srgb,var(--app-main) 35%,transparent)!important;border-color:var(--app-text)!important;background:var(--app-text)!important;color:var(--app-main)!important}
 :root[data-theme=light] .folder-go,:root[data-theme=light] .folder-confirm{background:var(--app-text);color:var(--app-main)}
+
+/* ChatGPT device-code sign-in: the code and the verification page are the only
+   credentials shown, and they stay inside the dialog. */
+.login-dialog{position:fixed;inset:0;width:min(430px,calc(100vw - 28px));max-height:calc(100dvh - 28px);margin:auto;padding:0;border:0;border-radius:14px;background:transparent;color:var(--app-text)}
+.login-dialog::backdrop{background:rgba(0,0,0,.52);backdrop-filter:blur(2px)}
+.login-card{background:var(--app-panel);border:1px solid var(--app-border-default);border-radius:14px;box-shadow:var(--app-elevation-shadow);overflow:hidden}
+.login-head{display:flex;align-items:center;gap:9px;padding:13px 14px;border-bottom:1px solid var(--app-border)}
+.login-head>.icon-slot{color:var(--app-text-secondary)}
+.login-head>div{display:flex;flex-direction:column;min-width:0}
+.login-head strong{font-size:13px}
+.login-head span{color:var(--app-text-secondary);font-size:11px}
+.login-head .icon-button{margin-left:auto}
+.login-body{display:flex;flex-direction:column;gap:10px;padding:14px}
+.login-body p{margin:0;font-size:12px;line-height:1.5;color:var(--app-text-secondary)}
+.login-code{display:flex;align-items:center;gap:8px}
+.login-code code{flex:1;min-width:0;padding:9px 11px;border:1px solid var(--app-border-default);border-radius:8px;background:var(--app-input);font:600 15px var(--mono);letter-spacing:.12em;text-align:center;overflow-wrap:anywhere}
+.login-verify a{color:var(--app-link);font-size:12px}
+.login-status{font-size:11px}
+.login-actions{display:flex;justify-content:flex-end;gap:8px;padding:11px 14px;border-top:1px solid var(--app-border)}

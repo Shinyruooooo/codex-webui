@@ -16,14 +16,15 @@
 
 ## 安装
 
-需要 [Bun](https://bun.sh/) 1.3+、Node.js 20+、Git，以及已登录的 Codex CLI。推荐 Linux；Windows 尚未完整测试。当前验证的 Codex CLI 版本为 `0.162.1`。
+需要 [Bun](https://bun.sh/) 1.3+、Node.js 20+、Git，以及已登录的 Codex 账号。推荐 Linux；Windows 尚未完整测试。当前验证的 Codex CLI 版本为 `0.162.1`。
 
-如果尚未安装和登录 Codex：
+如果尚未安装 Codex：
 
 ```bash
 npm install -g @openai/codex
-codex login
 ```
+
+可以直接在 WebUI 里登录 ChatGPT 账号：打开 **设置 → 个人资料**，点击 **使用 ChatGPT 登录**，然后在验证页面输入一次性验证码。WebUI 通过 Codex 桥接发起设备码登录，因此在无浏览器的服务器上同样可用。命令行 `codex login` 依然可用，两者写入同一份凭据存储，CLI 会自动使用该账号。登录会替换本服务使用的账号，请把 WebUI 密码视为该账号的访问边界。
 
 安装并启动 WebUI：
 

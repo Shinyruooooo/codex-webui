@@ -162,4 +162,12 @@ describe("ChatGPT device-code sign-in", () => {
     expect(result.userCode).toBe("TEST-CODE");
     expect(JSON.stringify(result)).not.toContain("sk-not-a-real-key");
   });
+
+  test("reports the account as signed out again after a logout", async () => {
+    await rpc("account/logout", {});
+    const status = await loginStatus();
+    expect(status.signedIn).toBe(false);
+    expect(status.accountType).toBe("unknown");
+    expect(status.pending).toBe(null);
+  });
 });

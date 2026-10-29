@@ -153,6 +153,26 @@ function recordPendingLogin(result: any) {
   return login;
 }
 
+/**
+ * Local credential state. The app-server's `account/read` can block on
+ * workspace routing discovery, so the sign-in state is answered from the
+ * credential store the bridge writes instead of from a network round trip.
+ */
+function localAuthState() {
+  const path = process.env.CODEX_AUTH_PATH || join(codexHomeDir, "auth.json");
+  try {
+    const raw = JSON.parse(readFileSync(path, "utf8")) as any;
+    const accessToken = typeof raw?.tokens?.access_token === "string" ? raw.tokens.access_token.trim() : "";
+    const refreshToken = typeof raw?.tokens?.refresh_token === "string" ? raw.tokens.refresh_token.trim() : "";
+    const storedKey = typeof raw?.OPENAI_API_KEY === "string" ? raw.OPENAI_API_KEY.trim() : "";
+    if (accessToken || refreshToken) return { signedIn: true, accountType: "chatgpt" };
+    if (storedKey || process.env.OPENAI_API_KEY?.trim()) return { signedIn: true, accountType: "apiKey" };
+    return { signedIn: false, accountType: "unknown" };
+  } catch {
+    return { signedIn: false, accountType: "unknown" };
+  }
+}
+
 function pendingLoginView() {
   const now = Date.now();
   for (const [loginId, login] of pendingLogins) if (now - login.startedAt > LOGIN_PENDING_TTL_MS) pendingLogins.delete(loginId);
@@ -672,6 +692,12 @@ async function dispatchBrowserMessage(message: any) {
       if (message.method === "account/login/cancel") {
         const result = await request("account/login/cancel", params);
         if (typeof params.loginId === "string") pendingLogins.delete(params.loginId);
+        return { type: "rpc/result", id, result };
+      }
+      if (message.method === "account/logout") {
+        const result = await request("account/logout", params);
+        // A logout drops the credentials, so no sign-in stays open.
+        pendingLogins.clear();
         return { type: "rpc/result", id, result };
       }
       const result = message.method === "host/thread/live"
@@ -1366,15 +1392,9 @@ const server = createServer(async (req, res) => {
   if (url.pathname === "/api/login/status") {
     // Sign-in state is safe to expose to any authenticated session: it carries
     // the device code and the public verification page, never a token.
-    let accountType = "unknown";
-    try {
-      const account = await accountLoader.get();
-      if (typeof account?.type === "string") accountType = account.type;
-    } catch (error) {
-      console.warn("[codex-webui] login status failed:", error instanceof Error ? error.message : String(error));
-    }
+    const auth = localAuthState();
     res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
-    res.end(JSON.stringify({ signedIn: accountType !== "unknown", accountType, pending: pendingLoginView() }));
+    res.end(JSON.stringify({ signedIn: auth.signedIn, accountType: auth.accountType, pending: pendingLoginView() }));
     return;
   }
   if (url.pathname === "/api/account" || url.pathname === "/api/account/avatar") {

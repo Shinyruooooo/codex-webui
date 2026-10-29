@@ -39,7 +39,7 @@ const authPath = join(codexHome, "auth.json");
 let signedIn = existsSync(authPath);
 
 function persistAuth() {
-  writeFileSync(authPath, JSON.stringify({ auth_mode: "chatgpt", tokens: { account_id: "acct_mock" } }, null, 2), { mode: 0o600 });
+  writeFileSync(authPath, JSON.stringify({ auth_mode: "chatgpt", tokens: { access_token: "mock-access-token", account_id: "acct_mock" } }, null, 2), { mode: 0o600 });
 }
 
 function handle(id, method, params) {

@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
+  ARCHIVED_THREADS_STORAGE_KEY,
   DRAFT_STORAGE_PREFIX,
   buildConversationInput,
   draftStorageKey,
   exportFilename,
   formatThreadExportMarkdown,
+  readArchivedThreads,
   readThreadDraft,
+  writeArchivedThreads,
   writeThreadDraft,
 } from "../public/session-tools.js";
 
@@ -135,5 +138,45 @@ describe("session tools", () => {
     const filename = exportFilename("My Project / Notes", ".md");
     expect(filename).toMatch(/^my-project-notes-\d{4}-\d{2}-\d{2}\.md$/);
     expect(exportFilename("!!!", "../json")).toMatch(/^conversation-\d{4}-\d{2}-\d{2}\.json$/);
+  });
+});
+
+describe("archived thread bookkeeping", () => {
+  test("round-trips archived entries through storage and drops invalid rows", () => {
+    const storage = memoryStorage();
+    writeArchivedThreads([
+      { id: "thread-1", name: "Plan A", cwd: "/work/app", archivedAt: 1730000000000 },
+      { id: "", name: "broken", cwd: "", archivedAt: 0 },
+      { name: "no id", cwd: "", archivedAt: 0 },
+      "not-an-object",
+    ], storage);
+    expect(readArchivedThreads(storage)).toEqual([
+      { id: "thread-1", name: "Plan A", cwd: "/work/app", archivedAt: 1730000000000 },
+    ]);
+    expect(storage.values.get(ARCHIVED_THREADS_STORAGE_KEY)).toBeTruthy();
+  });
+
+  test("normalizes missing fields and clears the key when the list empties", () => {
+    const storage = memoryStorage();
+    writeArchivedThreads([{ id: "thread-2" }], storage);
+    expect(readArchivedThreads(storage)).toEqual([
+      { id: "thread-2", name: "", cwd: "", archivedAt: 0 },
+    ]);
+    writeArchivedThreads([], storage);
+    expect(storage.values.has(ARCHIVED_THREADS_STORAGE_KEY)).toBe(false);
+    expect(readArchivedThreads(storage)).toEqual([]);
+  });
+
+  test("survives corrupt JSON and unavailable storage", () => {
+    const storage = memoryStorage();
+    storage.setItem(ARCHIVED_THREADS_STORAGE_KEY, "{not json");
+    expect(readArchivedThreads(storage)).toEqual([]);
+    const rejecting = {
+      getItem() { throw new Error("denied"); },
+      setItem() { throw new Error("denied"); },
+      removeItem() { throw new Error("denied"); },
+    };
+    expect(readArchivedThreads(rejecting as any)).toEqual([]);
+    expect(() => writeArchivedThreads([{ id: "x" }], rejecting as any)).not.toThrow();
   });
 });

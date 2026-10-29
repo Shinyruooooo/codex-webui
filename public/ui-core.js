@@ -150,3 +150,23 @@ export function applyComposerSuggestion(text, match, replacement) {
   const inserted = String(replacement || "") + (needsSpace ? " " : "");
   return { text: before + inserted + after, cursor: before.length + inserted.length };
 }
+
+/**
+ * Resolves what the sign-in surface should show.
+ *
+ * The completion notification can be missed when the browser tab is
+ * suspended or the bridge connection drops, so the open sign-in is polled as
+ * well. The outcome tells the client whether the sign-in succeeded, ended
+ * without an account, or is still running.
+ */
+export function resolveLoginStatus(previous, payload) {
+  const before = previous || {};
+  const signedInBefore = !!before.signedIn;
+  const pending = payload?.pending || null;
+  const signedIn = !!payload?.signedIn;
+  const accountType = typeof payload?.accountType === "string" && payload.accountType ? payload.accountType : "unknown";
+  let outcome = "pending";
+  if (!pending && signedIn && !signedInBefore) outcome = "signed-in";
+  else if (!pending && !signedIn && before.loginId) outcome = "not-completed";
+  return { signedIn, accountType, pending, outcome };
+}

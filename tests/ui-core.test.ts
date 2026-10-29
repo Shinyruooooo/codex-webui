@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_TURN_PAGE_SIZE, applyComposerSuggestion, createLatestRequestGate, createTurnWindow, defaultModelState, filterAppModels, formatFileMention, getComposerAutocomplete, groupModelsByProvider, resolveComposerPlaceholder, selectModelState } from "../public/ui-core.js";
+import { DEFAULT_TURN_PAGE_SIZE, applyComposerSuggestion, createLatestRequestGate, createTurnWindow, defaultModelState, filterAppModels, formatFileMention, getComposerAutocomplete, groupModelsByProvider, resolveComposerPlaceholder, resolveLoginStatus, selectModelState } from "../public/ui-core.js";
 
 describe("conversation turn window", () => {
   test("uses a small default page for fast first paint", () => {
@@ -144,5 +144,41 @@ describe("composer autocomplete", () => {
   test("adds a trailing space when completing at the end", () => {
     const slash = getComposerAutocomplete("/plan", 5)!;
     expect(applyComposerSuggestion("/plan", slash, "/plan")).toEqual({ text: "/plan ", cursor: 6 });
+  });
+});
+
+describe("ChatGPT sign-in status", () => {
+  const pending = { loginId: "login-1", userCode: "TEST-CODE", verificationUrl: "https://auth.openai.com/codex/device" };
+
+  test("keeps the sign-in open while a code is pending", () => {
+    const resolved = resolveLoginStatus({ signedIn: false, loginId: "" }, { signedIn: false, accountType: "unknown", pending });
+    expect(resolved.outcome).toBe("pending");
+    expect(resolved.pending?.userCode).toBe("TEST-CODE");
+    expect(resolved.signedIn).toBe(false);
+  });
+
+  test("reports a finished sign-in once the account is present", () => {
+    const resolved = resolveLoginStatus({ signedIn: false, loginId: "login-1" }, { signedIn: true, accountType: "chatgpt", pending: null });
+    expect(resolved.outcome).toBe("signed-in");
+    expect(resolved.accountType).toBe("chatgpt");
+  });
+
+  test("does not repeat the success notice for an account that was already signed in", () => {
+    const resolved = resolveLoginStatus({ signedIn: true, loginId: "" }, { signedIn: true, accountType: "chatgpt", pending: null });
+    expect(resolved.outcome).toBe("pending");
+    expect(resolved.signedIn).toBe(true);
+  });
+
+  test("reports a sign-in that ended without an account", () => {
+    const resolved = resolveLoginStatus({ signedIn: false, loginId: "login-1" }, { signedIn: false, accountType: "unknown", pending: null });
+    expect(resolved.outcome).toBe("not-completed");
+  });
+
+  test("falls back to safe defaults for a malformed status", () => {
+    const resolved = resolveLoginStatus(undefined, undefined);
+    expect(resolved.outcome).toBe("pending");
+    expect(resolved.signedIn).toBe(false);
+    expect(resolved.accountType).toBe("unknown");
+    expect(resolved.pending).toBe(null);
   });
 });

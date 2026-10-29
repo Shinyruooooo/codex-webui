@@ -1,6 +1,7 @@
 import { closeSync, constants as fsConstants, fstatSync, lstatSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { basename, extname, isAbsolute, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { hasSensitivePathSegment } from "./file-service.js";
 
 export const LOCAL_IMAGE_MAX_BYTES = 25 * 1024 * 1024;
 
@@ -46,12 +47,14 @@ export function resolveLocalImage(input, {
 } = {}) {
   const expanded = expandImagePath(input, home);
   const candidate = resolve(isAbsolute(expanded) ? expanded : resolve(cwd, expanded));
+  if (hasSensitivePathSegment(candidate)) throw new Error("Path is not allowed");
   const roots = canonicalRoots(allowedRoots);
   if (!roots.length) throw new Error("No image roots are available");
 
   const metadata = lstatSync(candidate);
   if (metadata.isSymbolicLink() || !metadata.isFile()) throw new Error("Image not found");
   const path = realpathSync(candidate);
+  if (hasSensitivePathSegment(path)) throw new Error("Path is not allowed");
   if (path !== candidate || !roots.some(root => inside(path, root))) throw new Error("Image is outside allowed roots");
   const realStat = statSync(path);
   if (!realStat.isFile() || realStat.ino !== metadata.ino || realStat.dev !== metadata.dev) throw new Error("Image not found");
@@ -66,6 +69,7 @@ export function resolveLocalImage(input, {
 
 export function readVerifiedLocalImage(input, options = {}) {
   const image = resolveLocalImage(input, options);
+  if (hasSensitivePathSegment(image.path)) throw new Error("Path is not allowed");
   const allowedRoots = options.allowedRoots || [options.home || process.env.HOME || process.cwd()];
   const flags = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW || 0);
   const fd = openSync(image.path, flags);

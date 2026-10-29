@@ -35,6 +35,7 @@ import {
   isAllowedBrowserRpcMethod,
   isAuthorizedHttpRequest,
   isRequestAuthorized,
+  isTrustedPasswordSetupRequest,
   passwordSessionCookie,
   resolvePublicAsset,
   resolveSafeRegularFile,
@@ -69,7 +70,7 @@ import {
   toPublicAccountIdentity,
 } from "./server/profile-service.ts";
 
-const APP_VERSION = "0.9.1";
+const APP_VERSION = "1.0.0";
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 8899);
 const accessToken = process.env.CODEX_WEBUI_ACCESS_TOKEN || null;
@@ -92,8 +93,8 @@ if (projectless && !configuredReviewRoot) {
 const defaultCwd = resolve(process.env.CODEX_WEBUI_CWD || (projectless ? homeDir : appRoot));
 const reviewRoots = [resolve(configuredReviewRoot || defaultCwd)];
 const browseRoots = [...new Set([...defaultBrowseRoots(homeDir), defaultCwd, ...reviewRoots])];
-const imageRoots = [...new Set([...browseRoots, resolve(tmpdir()), resolve("/tmp")])];
-const fileRoots = [...new Set([...browseRoots, defaultCwd, resolve(tmpdir()), resolve("/tmp")])];
+const imageRoots = [...new Set([...browseRoots, resolve(tmpdir())])];
+const fileRoots = [...new Set([...browseRoots, defaultCwd, resolve(tmpdir())])];
 const loginRateLimiter = createLoginRateLimiter();
 const clients = new Set<WebSocket>();
 const sseClients = new Set<ServerResponse>();
@@ -129,6 +130,11 @@ let stdoutBuffer = "";
 let connected = false;
 let shuttingDown = false;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
+// A crashing app-server must not be respawned in a tight loop: the delay
+// doubles after every failed start and resets once a session initializes.
+const RESTART_BACKOFF_MIN_MS = 1000;
+const RESTART_BACKOFF_MAX_MS = 30000;
+let restartBackoffMs = RESTART_BACKOFF_MIN_MS;
 let httpClosed = false;
 const accountLoader = createAccountIdentityLoader(async (refresh) => {
   const account = await request("account/read", { refreshToken: refresh });
@@ -180,6 +186,13 @@ function pendingLoginView() {
   return latest ? { loginId: latest.loginId, userCode: latest.userCode, verificationUrl: latest.verificationUrl, startedAt: latest.startedAt } : null;
 }
 
+function scheduleCodexRestart() {
+  if (shuttingDown || restartTimer) return;
+  const delay = restartBackoffMs;
+  restartBackoffMs = Math.min(restartBackoffMs * 2, RESTART_BACKOFF_MAX_MS);
+  restartTimer = setTimeout(() => { restartTimer = null; startCodex(); }, delay);
+}
+
 function startCodex() {
   if (shuttingDown) return;
   if (codex && codex.exitCode === null) return;
@@ -198,7 +211,7 @@ function startCodex() {
     console.error("[codex-webui] failed to spawn codex app-server:", error);
     connected = false;
     broadcast({ type: "bridge/status", status: "disconnected", code: null, signal: null });
-    if (!shuttingDown && !restartTimer) restartTimer = setTimeout(() => { restartTimer = null; startCodex(); }, 2000);
+    if (!shuttingDown && !restartTimer) scheduleCodexRestart();
     return;
   }
   codex = child;
@@ -216,7 +229,7 @@ function startCodex() {
     pending.clear();
     if (codex === child) codex = null;
     if (shuttingDown) maybeFinishShutdown();
-    else if (!restartTimer) restartTimer = setTimeout(() => { restartTimer = null; startCodex(); }, 1000);
+    else scheduleCodexRestart();
   };
   child.on("error", (error) => {
     console.error("[codex app-server] process error:", error instanceof Error ? error.message : String(error));
@@ -305,6 +318,7 @@ async function initialize() {
     });
   }
   connected = true;
+  restartBackoffMs = RESTART_BACKOFF_MIN_MS;
   broadcast({ type: "bridge/status", status: "connected", info: result });
 }
 
@@ -333,8 +347,15 @@ function handleCodex(message: any) {
       // them immediately; running turns are interrupted, as with a provider
       // change.
       if (message.params?.success && codex && codex.exitCode === null) {
-        connected = false;
-        terminateCodex();
+        // Restart the bridge after the notification went out, so the browser
+        // sees the sign-in succeed even when the restart interrupts the
+        // connection.
+        setTimeout(() => {
+          if (codex && codex.exitCode === null) {
+            connected = false;
+            terminateCodex();
+          }
+        }, 250);
       }
     }
     if (message.method === "turn/diff/updated") reviewDiffs.record(message.params || {});
@@ -451,8 +472,26 @@ function assertRoutedModelEnabled(model: unknown, providerId?: unknown) {
   assertProviderModelEnabled(providerConfig.providers, model, providerId);
 }
 
+// Runtime options a browser client may set on a thread or a turn. Everything
+// else the app-server accepts in `config` stays out of reach of the browser.
+const BROWSER_RPC_CONFIG_KEYS = ["model", "model_provider", "approvalPolicy", "sandbox"];
+
 function sanitizeBrowserRpcParams(method: string, rawParams: any) {
-  const params = rawParams && typeof rawParams === "object" ? { ...rawParams } : {};
+  let params = rawParams && typeof rawParams === "object" ? { ...rawParams } : {};
+  if (method === "thread/start" || method === "turn/start") {
+    const config = params.config;
+    if (config && typeof config === "object" && !Array.isArray(config)) {
+      const allowed: Record<string, unknown> = {};
+      for (const key of BROWSER_RPC_CONFIG_KEYS) {
+        if (key in config) allowed[key] = (config as any)[key];
+      }
+      params.config = allowed;
+    }
+  }
+  if (method === "skills/config/write") {
+    // Skill configuration carries only the selected skill and its state.
+    params = { path: params.path, enabled: params.enabled };
+  }
   // Codex treats omitted/null modelProviders as the configured default provider;
   // an explicit empty list means all providers. The WebUI sidebar spans them all,
   // including history from disabled or no-longer-configured providers.
@@ -667,8 +706,8 @@ async function dispatchBrowserMessage(message: any) {
         // The catalog lookup is asynchronous; the destination must still be safe
         // when the native configuration write is actually dispatched.
         assertWritableCodexHome(codexHomeDir, homeDir);
-        delete params.name;
-        delete params.cwd;
+        // Only the selected skill and its state reach the app-server; the
+        // sanitizer already dropped every other browser-supplied field.
       }
       if (message.method === "thread/compact/start") {
         if (!threadProviders.has(params.threadId) || !threadModels.has(params.threadId)) {
@@ -940,7 +979,14 @@ const server = createServer(async (req, res) => {
       sendAuthError(res, 400, "Password must be between 12 and 256 characters");
       return;
     }
-    if (!requestMatchesSecret(req, submittedPassword, submittedPassword)) {
+    if (!isTrustedPasswordSetupRequest({
+      origin: req.headers.origin,
+      hostHeader: req.headers.host,
+      remoteAddress: req.socket.remoteAddress,
+      forwardedFor: req.headers["x-forwarded-for"],
+      forwarded: req.headers.forwarded,
+      realIp: req.headers["x-real-ip"],
+    })) {
       sendAuthError(res, 403, "Password setup request was rejected");
       return;
     }
@@ -957,10 +1003,6 @@ const server = createServer(async (req, res) => {
       issueBrowserSession(req, res);
     } catch (error: any) {
       if (error?.code === "EEXIST") {
-        try {
-          managedPassword = loadStoredPassword(managedPasswordPath);
-          authSecret = storedPasswordSessionSecret(managedPassword);
-        } catch { /* Keep the original exclusive-create failure as the response. */ }
         sendAuthError(res, 409, "Password setup is no longer available");
       } else {
         console.error("[codex-webui] password setup failed", error);

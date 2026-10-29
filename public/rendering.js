@@ -1,12 +1,17 @@
 import { marked } from "marked";
 import katex from "katex";
+import createDOMPurify from "dompurify";
+
+// DOMPurify 必须在浏览器里真实可用：仅声明依赖而从不加载会让生产路径退化为正则兜底，
+// 实体编码的 javascript: 伪协议可以绕过。测试环境（bun 无 window）走正则兜底分支。
+const DOMPURIFY_OPTIONS = { ADD_ATTR: ["target", "rel"], FORBID_TAGS: ["style", "script", "iframe", "object", "embed", "form", "input", "svg", "math"] };
 
 const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[char]));
 
 const stash = (store, html) => {
-  const token = `\u0000CODEX${store.length}\u0000`;
+  const token = `\uE000CODEX${store.length}\uE001`;
   store.push(html);
   return token;
 };
@@ -224,11 +229,50 @@ function renderMath(source, protectedBlocks = []) {
   return { text, protectedBlocks };
 }
 
+const HTML_ENTITY_VALUES = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", colon: ":", tab: "\t", newline: "\n", nbsp: "\u00a0" };
+const DANGEROUS_URL_SCHEME = /^(?:javascript|vbscript):/i;
+
+function decodeHtmlEntities(value = "") {
+  return String(value).replace(/&(#[xX][0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]*);/g, (match, entity) => {
+    if (entity[0] === "#") {
+      const code = entity[1] === "x" || entity[1] === "X"
+        ? Number.parseInt(entity.slice(2), 16)
+        : Number.parseInt(entity.slice(1), 10);
+      if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return match;
+      try { return String.fromCodePoint(code); } catch { return match; }
+    }
+    const named = HTML_ENTITY_VALUES[entity.toLowerCase()];
+    return named === undefined ? match : named;
+  });
+}
+
+// 浏览器会在解析属性值时解码实体，危险 scheme 可能被拆成实体片段（&#106;avascript:），
+// 因此比较前需要解码并去掉会被浏览器忽略的控制字符。
+function isDangerousUrlValue(value = "") {
+  const decoded = decodeHtmlEntities(value).replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  return DANGEROUS_URL_SCHEME.test(decoded);
+}
+
+function stripDangerousUrlAttributes(html) {
+  return html.replace(/\b(href|src)(\s*=\s*)("[^"]*"|'[^']*'|[^\s>]+)/gi, (match, name, separator, rawValue) => {
+    const quoted = rawValue[0] === "\"" || rawValue[0] === "'";
+    const value = quoted ? rawValue.slice(1, -1) : rawValue;
+    return isDangerousUrlValue(value) ? "href=\"#\"" : match;
+  });
+}
+
+function resolveDomPurify() {
+  const injected = globalThis.DOMPurify;
+  if (injected && typeof injected.sanitize === "function") return injected;
+  if (typeof window === "undefined") return null;
+  const purifier = createDOMPurify(window);
+  return purifier && typeof purifier.sanitize === "function" ? purifier : null;
+}
+
 function sanitizeHtml(html) {
-  if (typeof window !== "undefined" && globalThis.DOMPurify) {
-    return globalThis.DOMPurify.sanitize(html, { ADD_ATTR: ["target", "rel"], FORBID_TAGS: ["style", "script", "iframe", "object", "embed"] });
-  }
-  return html
+  const purifier = resolveDomPurify();
+  if (purifier) return purifier.sanitize(html, DOMPURIFY_OPTIONS);
+  return stripDangerousUrlAttributes(html)
     .replace(/<(script|style|iframe|object|embed)\b[\s\S]*?<\/\1>/gi, (value) => escapeHtml(value))
     .replace(/\s(?:on\w+|style)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
     .replace(/(?:href|src)\s*=\s*(["'])\s*javascript:[\s\S]*?\1/gi, "href=\"#\"");
@@ -242,7 +286,7 @@ export function renderAssistantMarkdown(source = "", { cwd = "" } = {}) {
   let html = marked.parse(text, { async: false });
   const localLinks = protectLocalProtocolLinks(html);
   html = localLinks.restore(sanitizeHtml(localLinks.html)).replace(/javascript\s*:/gi, "");
-  html = html.replace(/\u0000CODEX(\d+)\u0000/g, (_, index) => protectedBlocks[Number(index)] || "");
+  html = html.replace(/\uE000CODEX(\d+)\uE001/g, (_, index) => protectedBlocks[Number(index)] || "");
   return renderLinks(renderImages(html, cwd), cwd);
 }
 

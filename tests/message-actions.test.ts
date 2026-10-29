@@ -338,6 +338,32 @@ describe("message copy actions", () => {
     expect(button.disabled).toBe(true);
   });
 
+  test("shows a fork control on user messages and forks only when enabled", () => {
+    const dom = makeDom("<article><div class='user-message'>hello</div></article>");
+    const root = dom.window.document.querySelector("article")!;
+    const actions = createMessageActions({ translate: (label) => label === "Fork from here" ? "从此处分叉" : label });
+    let forks = 0;
+    actions.updateMessageFork(root, { visible: false, disabled: false, onFork: () => { forks += 1; } });
+    expect(root.querySelector(".message-fork-actions")?.hidden).toBe(true);
+
+    actions.updateMessageFork(root, { visible: true, disabled: false, onFork: () => { forks += 1; } });
+    const button = root.querySelector(".message-fork-button") as HTMLButtonElement;
+    expect(button.type).toBe("button");
+    expect(button.getAttribute("aria-label")).toBe("从此处分叉");
+    const event = new dom.window.MouseEvent("click", { bubbles: true, cancelable: true });
+    let bubbled = false;
+    root.addEventListener("click", () => { bubbled = true; });
+    button.dispatchEvent(event);
+    expect(forks).toBe(1);
+    expect(event.defaultPrevented).toBe(true);
+    expect(bubbled).toBe(false);
+
+    actions.updateMessageFork(root, { visible: true, disabled: true, onFork: () => { forks += 1; } });
+    button.click();
+    expect(forks).toBe(1);
+    expect(button.disabled).toBe(true);
+  });
+
   test("prevents click default and propagation", () => {
     const dom = makeDom("<article><pre><code>x</code></pre></article>");
     const root = dom.window.document.querySelector("article")!;

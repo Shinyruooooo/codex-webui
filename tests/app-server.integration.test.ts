@@ -67,6 +67,36 @@ async function rejectedWebSocketStatus() {
   return output.trim();
 }
 
+async function startRealTurn(options: { ephemeral?: boolean } = {}) {
+  const modelsResult = await rpc("model/list", { limit: 50 });
+  const catalog = Array.isArray(modelsResult?.data) ? modelsResult.data : [];
+  const chosen = catalog.find((entry: any) => entry?.isDefault) || catalog[0] || { model: "gpt-6.1-sol", defaultReasoningEffort: "low" };
+  const model = chosen.model || chosen.id || "gpt-6.1-sol";
+  const supportedEfforts = (chosen.supportedReasoningEfforts || []).map((item: any) => item?.reasoningEffort).filter(Boolean);
+  const effort = supportedEfforts.includes("low") ? "low" : chosen.defaultReasoningEffort || supportedEfforts[0] || "medium";
+  const started = await rpc("thread/start", {
+    cwd: ROOT,
+    model,
+    approvalPolicy: "never",
+    sandbox: "read-only",
+    ephemeral: options.ephemeral ?? false,
+    sessionStartSource: "startup",
+  });
+  const threadId = started.thread.id;
+  const turn = await rpc("turn/start", {
+    threadId,
+    input: [{ type: "text", text: "Reply with exactly WEBUI_OK and do not use tools." }],
+    model,
+    effort,
+    approvalPolicy: "never",
+  });
+  const turnId = turn.turn.id;
+  const completed = await waitFor(() => notifications.find((n) => n.method === "turn/completed" && n.params.threadId === threadId && n.params.turn.id === turnId), 60_000);
+  if (completed.params.turn.status !== "completed") throw new Error(`Real turn failed: ${JSON.stringify({ status: completed.params.turn.status, error: completed.params.turn.error || completed.params.turn.failure || null })}`);
+  const deltas = notifications.filter((n) => n.method === "item/agentMessage/delta" && n.params.threadId === threadId && n.params.turnId === turnId).map((n) => n.params.delta).join("");
+  return { threadId, turnId, completed, deltas };
+}
+
 beforeAll(async () => {
   port = await freePort();
   proc = spawn({
@@ -134,18 +164,22 @@ describe("Codex WebUI app-server bridge", () => {
   }, 15_000);
 
   test("loads models and threads from the real Codex app-server", async () => {
-    const [models, threads] = await Promise.all([
-      rpc("model/list", { limit: 5 }),
-      rpc("thread/list", { limit: 3, sortKey: "recency_at", sortDirection: "desc" }),
-    ]);
+    const models = await rpc("model/list", { limit: 5 });
     expect(models.data.length).toBeGreaterThan(0);
     expect(models.data[0].model).toBeString();
-    expect(threads.data.length).toBeGreaterThan(0);
+
+    // A fresh machine has no stored conversations, so the test creates one with a
+    // real (non-ephemeral) turn - persisted as a single Codex session - instead of
+    // relying on the host's session history.
+    const { threadId } = await startRealTurn();
+    const threads = await rpc("thread/list", { limit: 20, sortKey: "recency_at", sortDirection: "desc" });
+    expect(Array.isArray(threads.data)).toBe(true);
+    expect(threads.data.map((thread: any) => thread.id)).toContain(threadId);
     expect(threads.data[0].id).toBeString();
-    const live = await rpc("host/thread/live", { threadId: threads.data[0].id });
+    const live = await rpc("host/thread/live", { threadId });
     expect(live.active).toBeBoolean();
     expect(live.turn === null || live.turn?.status === "inProgress").toBe(true);
-  });
+  }, 90_000);
 
   test("blocks filesystem and configuration RPC methods from browser clients", async () => {
     const probe = join(ROOT, `.security-rpc-probe-${process.pid}.txt`);
@@ -186,32 +220,7 @@ describe("Codex WebUI app-server bridge", () => {
   });
 
   test("streams a harmless real turn to completion", async () => {
-    const modelsResult = await rpc("model/list", { limit: 50 });
-    const catalog = Array.isArray(modelsResult?.data) ? modelsResult.data : [];
-    const chosen = catalog.find((entry: any) => entry?.isDefault) || catalog[0] || { model: "gpt-6.1-sol", defaultReasoningEffort: "low" };
-    const model = chosen.model || chosen.id || "gpt-6.1-sol";
-    const supportedEfforts = (chosen.supportedReasoningEfforts || []).map((item: any) => item?.reasoningEffort).filter(Boolean);
-    const effort = supportedEfforts.includes("low") ? "low" : chosen.defaultReasoningEffort || supportedEfforts[0] || "medium";
-    const started = await rpc("thread/start", {
-      cwd: ROOT,
-      model,
-      approvalPolicy: "never",
-      sandbox: "read-only",
-      ephemeral: true,
-      sessionStartSource: "startup",
-    });
-    const threadId = started.thread.id;
-    const turn = await rpc("turn/start", {
-      threadId,
-      input: [{ type: "text", text: "Reply with exactly WEBUI_OK and do not use tools." }],
-      model,
-      effort,
-      approvalPolicy: "never",
-    });
-    const turnId = turn.turn.id;
-    const completed = await waitFor(() => notifications.find((n) => n.method === "turn/completed" && n.params.threadId === threadId && n.params.turn.id === turnId), 60_000);
-    const deltas = notifications.filter((n) => n.method === "item/agentMessage/delta" && n.params.threadId === threadId && n.params.turnId === turnId).map((n) => n.params.delta).join("");
-    if (completed.params.turn.status !== "completed") throw new Error(`Real turn failed: ${JSON.stringify({ status: completed.params.turn.status, error: completed.params.turn.error || completed.params.turn.failure || null })}`);
+    const { completed, deltas } = await startRealTurn({ ephemeral: true });
     expect(completed.params.turn.status).toBe("completed");
     expect(deltas).toContain("WEBUI_OK");
   }, 70_000);

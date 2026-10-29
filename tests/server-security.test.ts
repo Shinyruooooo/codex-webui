@@ -2,16 +2,28 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createLoginRateLimiter, createPasswordSession, createStoredPassword, isAllowedBrowserRpcMethod, isRequestAuthorized, parseCookieHeader, resolvePublicAsset, storedPasswordSessionSecret, verifyPasswordSession, verifyStoredPassword } from "../server/server-security.js";
+import { createLoginRateLimiter, createPasswordSession, createStoredPassword, isAllowedBrowserRpcMethod, isRequestAuthorized, isTrustedPasswordSetupRequest, parseCookieHeader, resolvePublicAsset, storedPasswordSessionSecret, verifyPasswordSession, verifyStoredPassword } from "../server/server-security.js";
 
 describe("WebUI server security boundary", () => {
   test("allows only the RPC methods used by the browser client", () => {
-    for (const method of ["model/list", "permissionProfile/list", "skills/list", "skills/config/write", "account/logout", "account/login/start", "account/login/cancel", "thread/list", "thread/read", "thread/delete", "thread/resume", "thread/turns/list", "host/thread/live", "thread/start", "turn/start", "turn/steer", "turn/interrupt"]) {
+    for (const method of ["model/list", "permissionProfile/list", "skills/list", "skills/config/write", "account/logout", "account/login/start", "account/login/cancel", "thread/list", "thread/read", "thread/delete", "thread/resume", "thread/turns/list", "host/thread/live", "thread/start", "thread/fork", "thread/archive", "thread/unarchive", "turn/start", "turn/steer", "turn/interrupt"]) {
       expect(isAllowedBrowserRpcMethod(method)).toBe(true);
     }
     for (const method of ["fs/readFile", "fs/writeFile", "fs/remove", "fs/copy", "config/read", "account/read", "account/usage/read", "skills/extraRoots/set"]) {
       expect(isAllowedBrowserRpcMethod(method)).toBe(false);
     }
+  });
+
+  test("accepts password setup only from a local client or a same-origin browser", () => {
+    expect(isTrustedPasswordSetupRequest({ remoteAddress: "127.0.0.1", hostHeader: "localhost:8899" })).toBe(true);
+    expect(isTrustedPasswordSetupRequest({ remoteAddress: "::1", hostHeader: "127.0.0.1:8899" })).toBe(true);
+    expect(isTrustedPasswordSetupRequest({ remoteAddress: "198.51.100.20", hostHeader: "192.168.2.10:8899" })).toBe(false);
+    expect(isTrustedPasswordSetupRequest({ remoteAddress: "198.51.100.20", hostHeader: "192.168.2.10:8899", origin: "http://192.168.2.10:8899" })).toBe(true);
+    expect(isTrustedPasswordSetupRequest({ remoteAddress: "198.51.100.20", hostHeader: "192.168.2.10:8899", origin: "http://evil.example" })).toBe(false);
+    expect(isTrustedPasswordSetupRequest({ remoteAddress: "198.51.100.20", hostHeader: "192.168.2.10:8899", origin: "not-a-url" })).toBe(false);
+    expect(isTrustedPasswordSetupRequest({ remoteAddress: "127.0.0.1", hostHeader: "localhost:8899", forwardedFor: "198.51.100.20" })).toBe(false);
+    expect(isTrustedPasswordSetupRequest({ remoteAddress: "127.0.0.1", hostHeader: "localhost:8899", forwarded: "for=198.51.100.20" })).toBe(false);
+    expect(isTrustedPasswordSetupRequest({ remoteAddress: "127.0.0.1", hostHeader: "localhost:8899", realIp: "198.51.100.20" })).toBe(false);
   });
 
   test("serves only declared public assets and never follows symbolic links", () => {

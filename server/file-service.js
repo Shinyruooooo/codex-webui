@@ -8,6 +8,27 @@ export const WORKSPACE_UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
 const inside = (candidate, root) => candidate === root || candidate.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
 
+// Credential material lives next to the projects the browser may browse. The
+// file browser never needs it, so those locations are refused outright instead
+// of relying on the workspace boundary alone.
+const SENSITIVE_PATH_SEGMENTS = new Set([".ssh", ".aws", ".gnupg", ".codex"]);
+const SENSITIVE_ENV_SEGMENT = /^\.env(\..*)?$/;
+const SENSITIVE_FILE_NAME = /^(id_rsa|id_dsa|id_ecdsa|id_ed25519|.*\.(pem|key|p12))$/i;
+
+export function hasSensitivePathSegment(targetPath) {
+  const segments = String(targetPath || "").split(/[\\/]+/).filter(Boolean);
+  if (!segments.length) return false;
+  for (const segment of segments) {
+    if (SENSITIVE_PATH_SEGMENTS.has(segment)) return true;
+    if (SENSITIVE_ENV_SEGMENT.test(segment)) return true;
+  }
+  return SENSITIVE_FILE_NAME.test(segments[segments.length - 1]);
+}
+
+function assertPathIsAllowed(targetPath) {
+  if (hasSensitivePathSegment(targetPath)) throw new Error("Path is not allowed");
+}
+
 function canonicalRoots(roots) {
   const result = [];
   for (const root of roots || []) {
@@ -42,12 +63,14 @@ export function resolveLocalFile(input, {
 } = {}) {
   const expanded = expandFilePath(input, home);
   const candidate = resolve(isAbsolute(expanded) ? expanded : resolve(cwd, expanded));
+  assertPathIsAllowed(candidate);
   const roots = canonicalRoots(allowedRoots);
   if (!roots.length) throw new Error("No file roots are available");
 
   const metadata = lstatSync(candidate);
   if (metadata.isSymbolicLink() || !metadata.isFile()) throw new Error("File not found");
   const path = realpathSync(candidate);
+  assertPathIsAllowed(path);
   if (path !== candidate || !roots.some(root => inside(path, root))) throw new Error("File is outside allowed roots");
   const realStat = statSync(path);
   if (!realStat.isFile() || realStat.ino !== metadata.ino || realStat.dev !== metadata.dev) throw new Error("File not found");
@@ -131,6 +154,7 @@ function openVerifiedRegularFile(file, allowedRoots) {
 
 export function openVerifiedLocalFile(input, options = {}) {
   const file = resolveLocalFile(input, options);
+  assertPathIsAllowed(file.path);
   const allowedRoots = options.allowedRoots || [options.home || process.env.HOME || process.cwd()];
   const opened = openVerifiedRegularFile(file, allowedRoots);
   return { ...file, fd: opened.fd, size: opened.size };
@@ -182,6 +206,7 @@ export function readWorkspaceFilePreview(targetPath, {
   maxBytes = WORKSPACE_TEXT_PREVIEW_MAX_BYTES,
 } = {}) {
   const file = resolveLocalFile(targetPath, { cwd, home, allowedRoots, maxBytes: Number.MAX_SAFE_INTEGER });
+  assertPathIsAllowed(file.path);
   const canonicalCwd = realpathSync(resolve(cwd));
   const relativePath = inside(file.path, canonicalCwd) ? toPosix(relative(canonicalCwd, file.path)) : null;
   const base = { path: file.path, relativePath, filename: file.filename, size: file.size };
@@ -220,6 +245,10 @@ export function saveWorkspaceUpload({
   if (typeof filename !== "string" || !filename || filename.trim() === "") throw new Error("Upload filename is required");
   if (filename.includes("/") || filename.includes("\\") || filename.includes("..")) throw new Error("Upload filename must not contain paths or '..'");
   if (/[\u0000-\u001f\u007f]/.test(filename)) throw new Error("Upload filename must not contain control characters");
+  // Dotfiles carry credentials and shell configuration far more often than
+  // project data, so the upload channel never creates them.
+  if (filename.startsWith(".")) throw new Error("Upload filename is not allowed");
+  if (hasSensitivePathSegment(filename)) throw new Error("Path is not allowed");
   const bytes = Buffer.isBuffer(data) ? data : data instanceof Uint8Array ? Buffer.from(data) : typeof data === "string" ? Buffer.from(data, "base64") : null;
   if (!bytes) throw new Error("Upload data must be a Buffer, Uint8Array, or base64 string");
   const byteLimit = Number(maxBytes);
@@ -232,6 +261,8 @@ export function saveWorkspaceUpload({
   if (hasSensitiveVcsSegment(canonicalCwd) || hasSensitiveVcsSegment(target)) {
     throw new Error("Uploads into .git are not allowed");
   }
+  assertPathIsAllowed(canonicalCwd);
+  assertPathIsAllowed(target);
   const extension = extname(filename);
   const stem = extension ? filename.slice(0, -extension.length) : filename;
   const createFlags = fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | (fsConstants.O_NOFOLLOW || 0);
@@ -239,6 +270,7 @@ export function saveWorkspaceUpload({
   while (true) {
     const savedFilename = index === 1 ? filename : `${stem}-${index}${extension}`;
     const savedPath = resolve(target, savedFilename);
+    assertPathIsAllowed(savedPath);
     let fd = null;
     let created = false;
     try {

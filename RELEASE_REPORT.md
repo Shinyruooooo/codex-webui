@@ -1,51 +1,47 @@
-# Codex PiWeb UI v0.8.0 — Release Notes
+# Codex PiWeb UI v0.9.0 — Release Notes
 
-- **Version:** `0.8.0`
+- **Version:** `0.9.0`
 - **Date:** 2026-10-29
-- **Base release:** `v0.7.1`
+- **Base release:** `v0.8.0`
 - **Repository:** https://github.com/Shinyruooooo/codex-webui
 - **Stable branch:** `main`; ongoing development remains on `dev`.
-- **Release tag:** `v0.8.0`
+- **Release tag:** `v0.9.0`
 
 ## Highlights / 本次更新
 
-### Provider switching inside an existing chat — 对话内可切换提供商
+### Sign in with ChatGPT from the WebUI — 在 WebUI 内登录 ChatGPT
 
-- Every turn now sends the `modelProvider` that owns the selected model, so a conversation can move between providers without starting a new chat. Previously the bridge pinned a chat to the provider that created it and rejected a mismatch with "start a new chat to use …".
-- Codex resolves **one** default provider for the whole built-in model catalog, and users routinely alias it (`model_provider = "chatgpt-http"`). The bridge now reads that provider from the Codex configuration (`config/read`) and treats it as the built-in channel, so every native model stays on one channel instead of being split into foreign providers that would lock the conversation.
-- The bridge keeps the per-thread provider only for model validation and compaction; a turn may now cross channels. Visibility gates still apply: a model whose provider is disabled or removed is rejected for new inference.
-- The model picker no longer warns "Switching provider requires a new chat", and the Settings → Model providers note was updated to state that each turn uses the provider of the selected model.
-
-### Star a default model — 星标默认模型
-
-- A star next to each model in the model picker saves it as the default model for new conversations, matching Pi Web. The default is stored per browser, applies to new chats only, and each conversation keeps its own model.
-
-### Model picker grouped by provider — 模型选择器按提供商分组
-
-- The model picker now groups models by provider with a provider heading per group, matching Pi Web.
+- The Codex bridge can start a ChatGPT **device-code sign-in**, so a CLI sign-in is no longer a prerequisite. **Settings → Profile → Log in with ChatGPT** shows a one-time code and the verification page, and reports the result when Codex completes the sign-in.
+- The device-code flow was chosen deliberately: the browser OAuth flow of the app-server binds its callback to `http://127.0.0.1:1455/auth/callback`, which cannot work for a WebUI that is reached from another machine. The device code completes on the server side and therefore works on a headless host and from any browser.
+- The sign-in writes the same credential store as `codex login`, so the CLI picks up the same account afterwards. The bridge is restarted once the sign-in succeeds, so the new credentials are used immediately; running turns are interrupted, as with a provider change.
+- **Only the device-code flow is reachable from the browser.** The server pins the login type, an API key or token never travels through the browser RPC surface, and the code plus the verification page are the only values the browser receives. `account/read` and `account/usage/read` stay unavailable to browser clients.
+- Signing in replaces the account this service uses. The WebUI password remains the access boundary for that account; the account identity itself is still served on localhost only.
 
 ## Verification / 验证结果
 
 | Check | Result |
 | --- | --- |
-| `bun run test:unit` | Passed: 227 tests across 32 files, 0 failed |
+| `bun run test:unit` | Passed: 231 tests across 33 files, 0 failed |
 | `bun run check` | Passed: server, development entry and browser bundle compile |
-| `bun test tests/global-provider.integration.test.ts` | Passed: 3 tests, 0 failed — an aliased default provider (`model_provider = "alias-global"`) switches between built-in models, from the default channel to a managed provider and back, through a real Codex app-server against a mock Responses endpoint |
-| `bun test tests/custom-provider.integration.test.ts` | Passed: 14 tests, 0 failed — including the real turn that switches from a custom provider to a built-in model |
-| `bun test tests/i18n.test.ts` | Passed: 4 tests, 0 failed — the updated provider note stays translatable |
+| `bun test tests/account-login.integration.test.ts` | Passed: 5 tests, 0 failed — against a mock app-server: the device code and verification page reach the browser, the pending sign-in is cleared when Codex reports completion, the account becomes signed in, the browser RPC surface stays narrow (`account/read`, `account/usage/read`, `config/read` are rejected), and a browser-chosen login type is ignored |
+| `bun test tests/account-login-ui.test.ts` | Passed: 4 tests, 0 failed — the dialog, the profile entry, the client calls and the translations exist |
+| `bun test tests/server-security.test.ts` | Passed: the browser RPC allowlist covers the sign-in methods and still rejects account reads |
+| `bun test tests/custom-provider.integration.test.ts` | Passed: 14 tests, 0 failed — no regression in the provider flows |
+| `bun test tests/global-provider.integration.test.ts` | Passed: 3 tests, 0 failed |
+| Live `account/login/start` against the real Codex `0.164.0-alpha.12` and `auth.openai.com` | Passed: returned a device code and `https://auth.openai.com/codex/device`; `/api/login/status` then reported the pending sign-in; `account/login/cancel` reached the app-server |
 | `git diff --check` | Passed |
 
 ### Verification limits / 验证边界
 
-- **The browser end-to-end suites did not run on this machine.** Chromium fails to launch with `libatk-1.0.so.0: cannot open shared object file`, and the machine has no passwordless `sudo` to install the missing system library. The UI change is limited to removing one toast string and rewriting one Settings note, both covered by the i18n unit test, but the provider settings browser suite was not executed for this release.
-- **`tests/app-server.integration.test.ts` has two failing cases in this environment, and both fail identically on the unmodified `v0.7.1` tree.** "loads models and threads from the real Codex app-server" expects at least one existing thread and finds none on this account; "streams a harmless real turn to completion" failed twice with the upstream error `Selected model is at capacity` (`serverOverloaded`) and passed on re-runs. The first failure reproduces on a clean checkout of `4130c30`, so it is not caused by this release.
-- **No paid inference against a real provider was performed.** The provider routing was verified with a mock Responses endpoint and a real `codex app-server`; no API key was used and no billed model call was made.
-- The default provider is read once at startup with a 5 second timeout. If `config/read` fails or times out, provider checks stay permissive instead of blocking turns.
+- **The browser end-to-end suites did not run on this machine.** Chromium fails to launch with `libatk-1.0.so.0: cannot open shared object file`, and the machine has no passwordless `sudo` to install the missing system library. The dialog was therefore verified through its DOM structure, its client calls and the mock app-server, not through a rendered browser.
+- **No sign-in was completed.** Completing the device-code flow requires entering the code on the ChatGPT page by hand. The credential write, the account switch and the bridge restart after a successful sign-in are therefore implemented from the documented protocol but were not exercised end to end; the mock app-server covers the notification, the pending-state cleanup and the restart.
+- The credential store of the host was never touched during the verification: the live probe ran against an isolated `CODEX_HOME` with a copy of the credentials.
+- `tests/app-server.integration.test.ts` has two failing cases in this environment, and both fail identically on the unmodified `v0.7.1` tree; they are unrelated to this release.
 
 ## Scope and upgrade notes / 范围与升级说明
 
-- This release changes provider routing and the model picker. The authentication model, the working-directory behaviour, the conversation retry action, the inline image attachments and the terminal from v0.7.0 are unchanged.
-- Update the source and dependencies, then restart the WebUI so the new bridge logic is served, and reload the browser. Finish active Codex turns before restarting the service.
+- This release adds the ChatGPT sign-in flow. The provider routing, the model picker, the authentication model of the WebUI itself, the working-directory behaviour, the conversation retry action and the inline image attachments are unchanged.
+- Update the source and dependencies, then restart the WebUI so the new sign-in entry is served, and reload the browser. Finish active Codex turns before restarting the service.
 - Publishing a Git tag or Release does not restart a running service, and no conversation, project or provider data is migrated or rewritten.
 - Local screenshots, credentials, generated bundles and browser runtime libraries are excluded from the release commit.
 

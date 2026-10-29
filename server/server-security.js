@@ -8,6 +8,8 @@ const BROWSER_RPC_METHODS = new Set([
   "skills/list",
   "skills/config/write",
   "account/logout",
+  "account/login/start",
+  "account/login/cancel",
   "account/rateLimits/read",
   "thread/list",
   "thread/read",

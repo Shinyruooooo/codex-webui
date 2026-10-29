@@ -69,7 +69,7 @@ import {
   toPublicAccountIdentity,
 } from "./server/profile-service.ts";
 
-const APP_VERSION = "0.8.0";
+const APP_VERSION = "0.9.0";
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT || 8899);
 const accessToken = process.env.CODEX_WEBUI_ACCESS_TOKEN || null;
@@ -134,6 +134,31 @@ const accountLoader = createAccountIdentityLoader(async (refresh) => {
   const account = await request("account/read", { refreshToken: refresh });
   return resolveAccountIdentity(account);
 });
+
+// ChatGPT sign-in runs through the bridge's device-code flow, so the operator
+// no longer has to sign in through the CLI first. Only that flow is exposed:
+// it completes without a browser on this host and never carries a secret
+// through the browser. Codes are short-lived and shown to the operator only.
+const LOGIN_PENDING_TTL_MS = 10 * 60 * 1000;
+type PendingLogin = { loginId: string; userCode: string; verificationUrl: string; startedAt: number };
+const pendingLogins = new Map<string, PendingLogin>();
+
+function recordPendingLogin(result: any) {
+  const loginId = typeof result?.loginId === "string" ? result.loginId : "";
+  const userCode = typeof result?.userCode === "string" ? result.userCode : "";
+  const verificationUrl = typeof result?.verificationUrl === "string" ? result.verificationUrl : "";
+  if (!loginId || !userCode || !verificationUrl) return null;
+  const login: PendingLogin = { loginId, userCode, verificationUrl, startedAt: Date.now() };
+  pendingLogins.set(loginId, login);
+  return login;
+}
+
+function pendingLoginView() {
+  const now = Date.now();
+  for (const [loginId, login] of pendingLogins) if (now - login.startedAt > LOGIN_PENDING_TTL_MS) pendingLogins.delete(loginId);
+  const latest = [...pendingLogins.values()].sort((a, b) => b.startedAt - a.startedAt)[0];
+  return latest ? { loginId: latest.loginId, userCode: latest.userCode, verificationUrl: latest.verificationUrl, startedAt: latest.startedAt } : null;
+}
 
 function startCodex() {
   if (shuttingDown) return;
@@ -279,6 +304,19 @@ function handleCodex(message: any) {
   }
   if (message.method) {
     if (message.method === "account/updated") accountLoader.invalidate();
+    if (message.method === "account/login/completed") {
+      const loginId = typeof message.params?.loginId === "string" ? message.params.loginId : "";
+      if (loginId) pendingLogins.delete(loginId);
+      accountLoader.invalidate();
+      console.log(`[codex-webui] ChatGPT sign-in ${message.params?.success ? "completed" : "failed"}`);
+      // A new account means new credentials. Restart the bridge so it reads
+      // them immediately; running turns are interrupted, as with a provider
+      // change.
+      if (message.params?.success && codex && codex.exitCode === null) {
+        connected = false;
+        terminateCodex();
+      }
+    }
     if (message.method === "turn/diff/updated") reviewDiffs.record(message.params || {});
     if (message.method === "item/fileChange/patchUpdated") recordFileChangeDiff(message.params || {});
     if (message.method === "item/completed" && message.params?.item?.type === "fileChange") {
@@ -452,6 +490,14 @@ function sanitizeBrowserRpcParams(method: string, rawParams: any) {
     // The web composer always sends a model; an untracked client must do so too.
     if (!model && providerConfig.providers.length) throw new Error("Select a model before starting this turn.");
   }
+  if (method === "account/login/start") {
+    // Only the ChatGPT device-code flow is offered: it needs no browser on the
+    // server and never sends a secret through the browser.
+    params.type = "chatgptDeviceCode";
+  }
+  if (method === "account/login/cancel" && (typeof params.loginId !== "string" || !params.loginId.trim())) {
+    throw new Error("A sign-in id is required");
+  }
   return params;
 }
 
@@ -615,6 +661,18 @@ async function dispatchBrowserMessage(message: any) {
         const tracked = threadProviders.get(params.threadId);
         const isNativeModel = typeof model === "string" && nativeCatalogModelIds?.has(model);
         assertRoutedModelEnabled(model, owner || (!isNativeModel && tracked && tracked !== BUILTIN_PROVIDER_CHANNEL ? tracked : undefined));
+      }
+      if (message.method === "account/login/start") {
+        const started = await request("account/login/start", params);
+        const login = recordPendingLogin(started);
+        if (!login) throw new Error("The sign-in request did not return a device code");
+        // Only the one-time code and the verification page reach the browser.
+        return { type: "rpc/result", id, result: { loginId: login.loginId, userCode: login.userCode, verificationUrl: login.verificationUrl } };
+      }
+      if (message.method === "account/login/cancel") {
+        const result = await request("account/login/cancel", params);
+        if (typeof params.loginId === "string") pendingLogins.delete(params.loginId);
+        return { type: "rpc/result", id, result };
       }
       const result = message.method === "host/thread/live"
         ? await readLiveThread(params.threadId)
@@ -1303,6 +1361,20 @@ const server = createServer(async (req, res) => {
       res.writeHead(404, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
       res.end(JSON.stringify({ error: "Image unavailable" }));
     }
+    return;
+  }
+  if (url.pathname === "/api/login/status") {
+    // Sign-in state is safe to expose to any authenticated session: it carries
+    // the device code and the public verification page, never a token.
+    let accountType = "unknown";
+    try {
+      const account = await accountLoader.get();
+      if (typeof account?.type === "string") accountType = account.type;
+    } catch (error) {
+      console.warn("[codex-webui] login status failed:", error instanceof Error ? error.message : String(error));
+    }
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+    res.end(JSON.stringify({ signedIn: accountType !== "unknown", accountType, pending: pendingLoginView() }));
     return;
   }
   if (url.pathname === "/api/account" || url.pathname === "/api/account/avatar") {

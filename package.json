@@ -1,6 +1,6 @@
 {
   "name": "codex-piweb-ui",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Pi Web-style local WebUI for the Codex app-server (secondary development based on lezi-fun/codex-webui)",
   "private": true,
   "license": "MIT",
@@ -14,8 +14,8 @@
     "build": "bun build public/app.js --target=browser --outfile=public/app.bundle.js && bun build server.ts --target=bun --outfile=dist/server.js",
     "check": "bun build server.ts --target=bun --outfile=/tmp/codex-webui-server-check.js && bun build dev.ts --target=bun --outfile=/tmp/codex-webui-dev-check.js && bun build public/app.js --target=browser --outfile=/tmp/codex-webui-app-check.js",
     "test": "bun run test:unit",
-    "test:unit": "bun test tests/ui-core.test.ts tests/usage.test.ts tests/session-tools.test.ts tests/skill-service.test.ts tests/live-session-service.test.ts tests/theme.test.ts tests/settings-surface.test.ts tests/i18n.test.ts tests/browser-panel.test.ts tests/rendering.test.ts tests/bridge-errors.test.ts tests/folders.test.ts tests/file-search.test.ts tests/file-service.test.ts tests/image-service.test.ts tests/codex-icons.test.ts tests/codex-surfaces.test.ts tests/review-service.test.ts tests/profile-service.test.ts tests/profile-security.test.ts tests/server-security.test.ts tests/password-store.test.ts tests/review-state.test.ts tests/terminal-service.test.ts tests/workspace-context.test.ts tests/model-providers.test.ts tests/provider-presets.test.ts tests/provider-model-discovery.test.ts tests/release-metadata.test.ts tests/panel-resize.test.ts tests/message-actions.test.ts tests/chat-images.test.ts",
-    "test:integration": "bun test tests/app-server.integration.test.ts tests/custom-provider.integration.test.ts tests/global-provider.integration.test.ts",
+    "test:unit": "bun test tests/ui-core.test.ts tests/usage.test.ts tests/session-tools.test.ts tests/skill-service.test.ts tests/live-session-service.test.ts tests/theme.test.ts tests/settings-surface.test.ts tests/account-login-ui.test.ts tests/i18n.test.ts tests/browser-panel.test.ts tests/rendering.test.ts tests/bridge-errors.test.ts tests/folders.test.ts tests/file-search.test.ts tests/file-service.test.ts tests/image-service.test.ts tests/codex-icons.test.ts tests/codex-surfaces.test.ts tests/review-service.test.ts tests/profile-service.test.ts tests/profile-security.test.ts tests/server-security.test.ts tests/password-store.test.ts tests/review-state.test.ts tests/terminal-service.test.ts tests/workspace-context.test.ts tests/model-providers.test.ts tests/provider-presets.test.ts tests/provider-model-discovery.test.ts tests/release-metadata.test.ts tests/panel-resize.test.ts tests/message-actions.test.ts tests/chat-images.test.ts",
+    "test:integration": "bun test tests/app-server.integration.test.ts tests/custom-provider.integration.test.ts tests/global-provider.integration.test.ts tests/account-login.integration.test.ts",
     "test:skills": "bun tests/skills-management.e2e.mjs",
     "test:terminal": "bun test tests/terminal-service.test.ts && bun tests/terminal-focus.e2e.mjs",
     "test:terminal:webkit": "CODEX_WEBUI_TEST_BROWSER=webkit bun tests/terminal-focus.e2e.mjs",

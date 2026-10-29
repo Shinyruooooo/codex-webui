@@ -393,7 +393,7 @@
         </form>
         <div class="settings-row settings-readonly-row"><span><strong id="providerAddLabel">Add provider</strong><small id="providerAddHint">Choose a preset and enter your API key. Connection changes restart the bridge; model switches and refresh do not.</small></span><button class="files-action-button" id="providerAddButton" type="button">Add provider</button></div>
       </section>
-      <section class="settings-page" data-settings-content="profile" hidden><header class="settings-page-heading"><button class="settings-mobile-back icon-button" type="button" aria-label="Back to settings"><span class="icon-slot" data-icon="chevronLeft"></span></button><h1>Profile</h1></header><div class="settings-account-identity"><span class="account-avatar account-initials" id="settingsAccountAvatar">?</span><span><strong id="settingsAccountName">Settings</strong><small id="settingsAccountMeta"></small></span></div><div class="settings-section-title settings-section-spaced" id="settingsQuotaTitle" hidden>Remaining quota</div><div id="settingsQuotaRows"></div></section>
+      <section class="settings-page" data-settings-content="profile" hidden><header class="settings-page-heading"><button class="settings-mobile-back icon-button" type="button" aria-label="Back to settings"><span class="icon-slot" data-icon="chevronLeft"></span></button><h1>Profile</h1></header><div class="settings-account-identity"><span class="account-avatar account-initials" id="settingsAccountAvatar">?</span><span><strong id="settingsAccountName">Settings</strong><small id="settingsAccountMeta"></small></span></div><div class="settings-section-title settings-section-spaced" id="settingsQuotaTitle" hidden>Remaining quota</div><div id="settingsQuotaRows"></div><div class="settings-row settings-readonly-row" id="settingsAccountSignedOut" hidden><span><strong>Not signed in</strong><small>Sign in with your ChatGPT account to use its plan and quota on this service.</small></span><button class="files-action-button" id="settingsAccountLogin" type="button">Log in with ChatGPT</button></div></section>
       <section class="settings-page" data-settings-content="keyboard-shortcuts" hidden><header class="settings-page-heading"><button class="settings-mobile-back icon-button" type="button" aria-label="Back to settings"><span class="icon-slot" data-icon="chevronLeft"></span></button><h1>Keyboard shortcuts</h1></header><div class="shortcut-row"><span>New chat</span><kbd>⌘ K</kbd></div><div class="shortcut-row"><span>Toggle sidebar</span><kbd>⌘ B</kbd></div><div class="shortcut-row"><span>Toggle bottom panel</span><kbd>⌘ J</kbd></div></section>
       <section class="settings-page" data-settings-content="placeholder" hidden><header class="settings-page-heading"><button class="settings-mobile-back icon-button" type="button" aria-label="Back to settings"><span class="icon-slot" data-icon="chevronLeft"></span></button><h1 id="settingsPlaceholderTitle"></h1></header><small id="settingsPlaceholderDescription" hidden></small><div id="settingsPlaceholderRows"></div></section>
     </main>
@@ -409,6 +409,18 @@
     </div>
     <div class="permission-confirm-actions"><button value="cancel">Cancel</button><button type="button" class="danger" id="confirmFullAccess">Confirm</button></div>
   </form>
+</dialog>
+<dialog class="login-dialog" id="loginDialog" aria-labelledby="loginTitle">
+  <div class="login-card">
+    <div class="login-head"><span class="icon-slot" data-icon="userRound"></span><div><strong id="loginTitle">Log in with ChatGPT</strong><span id="loginSubtitle">Sign in to use your ChatGPT plan</span></div><button type="button" class="icon-button" id="loginClose" aria-label="Close"><span class="icon-slot" data-icon="x"></span></button></div>
+    <div class="login-body">
+      <p id="loginIntro">Open the verification page, sign in to ChatGPT, then enter this code.</p>
+      <div class="login-code"><code id="loginUserCode"></code><button type="button" class="files-action-button" id="loginCopyCode">Copy code</button></div>
+      <p class="login-verify"><a id="loginVerificationLink" href="#" target="_blank" rel="noopener noreferrer">Open verification page</a></p>
+      <p class="login-status" id="loginStatus"></p>
+    </div>
+    <div class="login-actions"><button type="button" class="files-action-button" id="loginCancel">Cancel</button></div>
+  </div>
 </dialog>
 <dialog class="terminal-diagnostics-dialog" id="terminalDiagnosticsDialog" aria-labelledby="terminalDiagnosticsTitle">
   <h2 id="terminalDiagnosticsTitle">Terminal diagnostics</h2>

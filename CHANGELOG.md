@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-29
+
+### Fixed
+- The sign-in state is now answered from the Codex credential store instead of `account/read`, which can block on workspace routing discovery. The status endpoint returns in milliseconds and no longer reports an unsigned account while a valid ChatGPT credential is present.
+- Signing out now closes a sign-in that was still open, so the sign-in entry stays available afterwards.
+
 ## [0.9.0] - 2026-10-29
 
 ### Added

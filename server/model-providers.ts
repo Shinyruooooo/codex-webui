@@ -268,6 +268,28 @@ export function providerForModel(providers: ProviderConfig[], model: unknown): s
   return null;
 }
 
+/**
+ * Channel of Codex's default provider. Codex routes the built-in model
+ * catalog through whatever `model_provider` resolves to, which may be
+ * aliased (`chatgpt-http`) instead of the literal `openai` id.
+ */
+export const BUILTIN_PROVIDER_CHANNEL = "__default__";
+
+/**
+ * Maps a provider id reported by Codex to the channel the WebUI compares.
+ * Managed providers own their channel; the effective default provider shares
+ * the built-in channel, so a chat may switch between the models it serves.
+ * Any other provider keeps its own channel and stays exclusive.
+ */
+export function providerChannel(providerId: unknown, providers: ProviderConfig[], defaultProviderId?: string | null): string {
+  if (typeof providerId !== "string" || !providerId) return BUILTIN_PROVIDER_CHANNEL;
+  if (providers.some((provider) => provider.id === providerId)) return providerId;
+  if (providerId === "openai") return BUILTIN_PROVIDER_CHANNEL;
+  // Without a known default provider every unmanaged id stays permissive.
+  if (!defaultProviderId || providerId === defaultProviderId) return BUILTIN_PROVIDER_CHANNEL;
+  return providerId;
+}
+
 /** Visibility toggles also gate new RPC inference, not just the browser picker. */
 export function assertProviderModelEnabled(providers: ProviderConfig[], model: unknown, providerId?: unknown) {
   const provider = typeof providerId === "string"

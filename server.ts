@@ -46,11 +46,13 @@ import { loadStoredPassword, passwordStorePath, saveStoredPassword, type StoredP
 import { providerPresets, providerWithPreset } from "./server/provider-presets.ts";
 import { discoverProviderModels } from "./server/provider-model-discovery.ts";
 import {
+  BUILTIN_PROVIDER_CHANNEL,
   loadProvidersConfig,
   assertProviderModelEnabled,
   mergeCustomModels,
   normalizeProviders,
   providerConfigArgs,
+  providerChannel,
   providerForModel,
   providerSpawnEnv,
   providersStorePath,
@@ -105,12 +107,17 @@ assertWritableCodexHome(codexHomeDir, homeDir);
 const modelsStorePath = providersStorePath(process.env);
 let providerConfig: { providers: ProviderConfig[]; warnings: string[] } = loadProvidersConfig(modelsStorePath);
 for (const warning of providerConfig.warnings) console.warn(`[codex-webui] ${warning}`);
-// threadId -> custom provider id used when the thread was started (turns can
-// only change the model, never the provider, so mismatches are rejected early).
+// threadId -> provider channel observed when the thread was started/resumed.
+// The bridge keeps this for model validation and compaction; turns may switch
+// between provider channels because each turn carries its selected model.
 const threadProviders = new Map<string, string>();
 const threadModels = new Map<string, string>();
 let providerMutationInProgress = false;
 let nativeCatalogModelIds: Set<string> | null = null;
+// Provider id Codex resolves as its default (`model_provider`). It may be an
+// alias such as "chatgpt-http" instead of the literal "openai" id, and it
+// owns every model of the built-in catalog.
+let defaultProviderId: string | null = null;
 const providerRevisionScope = randomUUID();
 let providerRevisionCounter = 0;
 function providerRevision() { return `${providerRevisionScope}:${providerRevisionCounter}`; }
@@ -245,6 +252,7 @@ async function initialize() {
     if (!providerConfig.warnings.includes(warning)) providerConfig.warnings.push(warning);
     console.warn(`[codex-webui] ${warning}`);
   }
+  await refreshDefaultProviderId();
   skillExtraRoots = defaultSkillExtraRoots(homeDir, process.env.CODEX_WEBUI_SKILL_EXTRA_ROOTS || "");
   if (skillExtraRoots.length > 0) {
     await request("skills/extraRoots/set", { extraRoots: skillExtraRoots }).catch((error) => {
@@ -424,18 +432,22 @@ function sanitizeBrowserRpcParams(method: string, rawParams: any) {
     else if (providerForModel(providerConfig.providers, params.model) && nativeCatalogModelIds?.has(params.model)) params.modelProvider = "openai";
   }
   if (method === "turn/start" && typeof params.model === "string" && typeof params.threadId === "string") {
-    const tracked = threadProviders.get(params.threadId);
+    // A thread may continue with a model owned by another provider. Tell the
+    // app-server which provider owns this turn's model; without this explicit
+    // hint it can keep using the provider that created the thread.
     const owner = routedProviderForModel(params.model);
-    const requested = owner || (tracked && params.model === threadModels.get(params.threadId) ? tracked : "__default__");
-    if (tracked && tracked !== requested) {
-      const describe = (id: string) => (id === "__default__" ? "the built-in OpenAI provider" : `"${id}"`);
-      throw new Error(`This chat uses ${describe(tracked)}; start a new chat to use ${describe(requested)}`);
-    }
+    if (owner) params.modelProvider = owner;
+    else if (typeof params.modelProvider !== "string" && defaultProviderId) params.modelProvider = defaultProviderId;
   }
   if (method === "turn/start") {
     const model = params.model || threadModels.get(params.threadId);
-    const provider = threadProviders.get(params.threadId);
-    assertRoutedModelEnabled(model, provider && provider !== "__default__" ? provider : undefined);
+    const owner = routedProviderForModel(model);
+    const tracked = threadProviders.get(params.threadId);
+    const isNativeModel = typeof model === "string" && nativeCatalogModelIds?.has(model);
+    const providerHint = owner
+      || (typeof params.modelProvider === "string" ? params.modelProvider : undefined)
+      || (!isNativeModel && tracked && tracked !== BUILTIN_PROVIDER_CHANNEL ? tracked : undefined);
+    assertRoutedModelEnabled(model, providerHint);
     // Model omissions are safe only when the bridge knows the thread's model.
     // The web composer always sends a model; an untracked client must do so too.
     if (!model && providerConfig.providers.length) throw new Error("Select a model before starting this turn.");
@@ -450,10 +462,13 @@ function mergeIntoModelList(result: any) {
 
 function rememberThreadProvider(threadId: unknown, model: unknown, actualProvider?: unknown) {
   if (typeof threadId !== "string" || !threadId) return;
-  // Tracks both custom and default-provider threads created through this bridge;
-  // turns may switch models but never cross providers.
+  // Tracks the routing channel of custom and default-provider threads created
+  // through this bridge for resume/compaction validation. Turns may switch
+  // models across channels.
   const nativeProvider = typeof actualProvider === "string" && actualProvider ? actualProvider : undefined;
-  threadProviders.set(threadId, nativeProvider ? nativeProvider === "openai" ? "__default__" : nativeProvider : routedProviderForModel(model) || threadProviders.get(threadId) || "__default__");
+  threadProviders.set(threadId, nativeProvider
+    ? providerChannel(nativeProvider, providerConfig.providers, defaultProviderId)
+    : routedProviderForModel(model) || threadProviders.get(threadId) || BUILTIN_PROVIDER_CHANNEL);
   if (typeof model === "string") threadModels.set(threadId, model);
   if (threadProviders.size > 2000) {
     const oldest = threadProviders.keys().next().value as string;
@@ -474,6 +489,27 @@ async function nativeModelIds() {
   if (!Array.isArray(catalog?.data) || catalog.nextCursor) throw new Error("Cannot verify the built-in model catalog. Try again shortly.");
   nativeCatalogModelIds = new Set<string>(catalog.data.map((entry: any) => entry.model || entry.id).filter((id: any) => typeof id === "string"));
   return nativeCatalogModelIds;
+}
+
+/**
+ * Reads the provider Codex resolves as its default. Native catalog models are
+ * served by it, so chats bound to it may switch between those models.
+ */
+async function refreshDefaultProviderId() {
+  try {
+    const result = await Promise.race([
+      request("config/read", { cwd: defaultCwd }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+    ]);
+    if (!result) {
+      console.warn("[codex-webui] config/read timed out; provider checks stay permissive.");
+      return;
+    }
+    const provider = result?.config?.model_provider;
+    defaultProviderId = typeof provider === "string" && provider.trim() ? provider.trim() : "openai";
+  } catch (error) {
+    console.warn("[codex-webui] config/read failed; provider checks stay permissive:", error instanceof Error ? error.message : String(error));
+  }
 }
 
 /** Called under the HTTP mutation lock; remote discovery never races a save. */
@@ -574,8 +610,11 @@ async function dispatchBrowserMessage(message: any) {
           rememberThreadProvider(resumed?.thread?.id || params.threadId, resumed?.model, resumed?.modelProvider || resumed?.thread?.modelProvider);
         }
         if (!threadModels.has(params.threadId)) throw new Error("Cannot determine this chat's model before compaction.");
-        const provider = threadProviders.get(params.threadId);
-        assertRoutedModelEnabled(threadModels.get(params.threadId), provider !== "__default__" ? provider : undefined);
+        const model = threadModels.get(params.threadId);
+        const owner = routedProviderForModel(model);
+        const tracked = threadProviders.get(params.threadId);
+        const isNativeModel = typeof model === "string" && nativeCatalogModelIds?.has(model);
+        assertRoutedModelEnabled(model, owner || (!isNativeModel && tracked && tracked !== BUILTIN_PROVIDER_CHANNEL ? tracked : undefined));
       }
       const result = message.method === "host/thread/live"
         ? await readLiveThread(params.threadId)

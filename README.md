@@ -71,7 +71,7 @@ Manage providers under **Settings → Model providers** (or edit the JSON store 
 
 1. Click a provider card (or **Add provider**) and enter its API key. The endpoint and model are prefilled: **GLM Coding Plan (China)**, **Z.AI Coding Plan (International)**, or **DeepSeek**. Cards show configured/enabled status; **Custom endpoint** keeps the manual setup.
 2. Optional: expand **Advanced configuration** to edit the prefilled ID, name, URL and model list. **Custom endpoint** keeps the original manual form. Models use one line each: `id`, `id | Display name`, or `id | Display name | low,medium,high`.
-3. Save. The Codex bridge restarts (interrupting running turns), custom models appear in the model picker, and new chats send `modelProvider` automatically. Switching provider requires a new chat.
+3. Save. The Codex bridge restarts (interrupting running turns), custom models appear in the model picker, and each turn sends the selected model's `modelProvider` automatically. You can switch between providers inside an existing chat.
 
 The GLM presets use their region-specific **Coding Plan** keys, not standard model API keys. Both regions intentionally update one `zai` provider; choose the region matching your key. Changing an endpoint requires a new key to avoid sending an old credential to a different service. DeepSeek defaults to `deepseek-flash`. Presets are a local, vendor-documented catalog, not an import of Pi's Chat/Anthropic-only providers or credentials. Provider setup saves the configuration; it does not validate a paid account or make a live inference request.
 

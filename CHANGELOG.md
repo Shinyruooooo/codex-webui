@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - A star next to each model in the model picker saves it as the default model for new conversations, matching Pi Web. The default is stored per browser and applies to new chats only; each conversation keeps its own model.
 - The model picker now groups models by provider, with a provider heading per group, matching Pi Web.
 
+### Changed
+- Providers can now be switched inside an existing conversation: every turn sends the `modelProvider` that owns the selected model, so switching a model between providers no longer requires a new chat. Codex's default provider is read from its configuration, which lets an aliased default provider (`model_provider = "chatgpt-http"`) keep serving the built-in catalog.
+
 ## [0.7.1] - 2026-10-22
 
 ### Added

@@ -1,21 +1,19 @@
-# Codex PiWeb UI v0.9.0 — Release Notes
+# Codex PiWeb UI v0.9.1 — Release Notes
 
-- **Version:** `0.9.0`
+- **Version:** `0.9.1`
 - **Date:** 2026-10-29
-- **Base release:** `v0.8.0`
+- **Base release:** `v0.9.0`
 - **Repository:** https://github.com/Shinyruooooo/codex-webui
 - **Stable branch:** `main`; ongoing development remains on `dev`.
-- **Release tag:** `v0.9.0`
+- **Release tag:** `v0.9.1`
 
 ## Highlights / 本次更新
 
-### Sign in with ChatGPT from the WebUI — 在 WebUI 内登录 ChatGPT
+### Reliable sign-in state — 登录状态判断修正
 
-- The Codex bridge can start a ChatGPT **device-code sign-in**, so a CLI sign-in is no longer a prerequisite. **Settings → Profile → Log in with ChatGPT** shows a one-time code and the verification page, and reports the result when Codex completes the sign-in.
-- The device-code flow was chosen deliberately: the browser OAuth flow of the app-server binds its callback to `http://127.0.0.1:1455/auth/callback`, which cannot work for a WebUI that is reached from another machine. The device code completes on the server side and therefore works on a headless host and from any browser.
-- The sign-in writes the same credential store as `codex login`, so the CLI picks up the same account afterwards. The bridge is restarted once the sign-in succeeds, so the new credentials are used immediately; running turns are interrupted, as with a provider change.
-- **Only the device-code flow is reachable from the browser.** The server pins the login type, an API key or token never travels through the browser RPC surface, and the code plus the verification page are the only values the browser receives. `account/read` and `account/usage/read` stay unavailable to browser clients.
-- Signing in replaces the account this service uses. The WebUI password remains the access boundary for that account; the account identity itself is still served on localhost only.
+- v0.9.0 answered the sign-in state with the app-server's `account/read`. That call can block on workspace routing discovery, so on a host with a slow or proxied connection to ChatGPT the status request hung and reported an unsigned account even though a valid credential was present.
+- The status is now read from the Codex credential store the bridge writes itself. It answers in milliseconds and matches what `codex login status` reports. Measured on the release host: `GET /api/login/status` returned `{"signedIn":true,"accountType":"chatgpt"}` in 13 ms, against a call that previously timed out.
+- Signing out also closes a sign-in that was still open, so the sign-in entry stays available after a logout.
 
 ## Verification / 验证结果
 
@@ -23,7 +21,7 @@
 | --- | --- |
 | `bun run test:unit` | Passed: 231 tests across 33 files, 0 failed |
 | `bun run check` | Passed: server, development entry and browser bundle compile |
-| `bun test tests/account-login.integration.test.ts` | Passed: 5 tests, 0 failed — against a mock app-server: the device code and verification page reach the browser, the pending sign-in is cleared when Codex reports completion, the account becomes signed in, the browser RPC surface stays narrow (`account/read`, `account/usage/read`, `config/read` are rejected), and a browser-chosen login type is ignored |
+| `bun test tests/account-login.integration.test.ts` | Passed: 6 tests, 0 failed — against a mock app-server: the device code and verification page reach the browser, the pending sign-in is cleared when Codex reports completion, the account becomes signed in and signed out again, the browser RPC surface stays narrow (`account/read`, `account/usage/read`, `config/read` are rejected), and a browser-chosen login type is ignored |
 | `bun test tests/account-login-ui.test.ts` | Passed: 4 tests, 0 failed — the dialog, the profile entry, the client calls and the translations exist |
 | `bun test tests/server-security.test.ts` | Passed: the browser RPC allowlist covers the sign-in methods and still rejects account reads |
 | `bun test tests/custom-provider.integration.test.ts` | Passed: 14 tests, 0 failed — no regression in the provider flows |

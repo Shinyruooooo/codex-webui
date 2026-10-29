@@ -37,6 +37,20 @@ describe("ChatGPT sign-in surface", () => {
     expect(app).toContain("/api/login/status");
   });
 
+  test("copies the code with the fallback that works on plain HTTP", () => {
+    // The WebUI is often reached over plain HTTP through a tunnel, where the
+    // native clipboard API is unavailable.
+    expect(app).toContain("copyTextToClipboard(code)");
+    expect(app).not.toContain("navigator.clipboard.writeText");
+    expect(app).toContain("t('Code copied')");
+  });
+
+  test("polls the sign-in state while the dialog is open", () => {
+    expect(app).toContain("startLoginPolling");
+    expect(app).toContain("resolveLoginStatus");
+    expect(app).toContain("stopLoginPolling");
+  });
+
   test("translates the sign-in surface", () => {
     for (const message of ["Log in with ChatGPT", "Copy code", "Open verification page", "Signed in to ChatGPT", "Not signed in"]) {
       expect(i18n).toContain(`"${message}":`);

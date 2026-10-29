@@ -333,8 +333,15 @@ function handleCodex(message: any) {
       // them immediately; running turns are interrupted, as with a provider
       // change.
       if (message.params?.success && codex && codex.exitCode === null) {
-        connected = false;
-        terminateCodex();
+        // Restart the bridge after the notification went out, so the browser
+        // sees the sign-in succeed even when the restart interrupts the
+        // connection.
+        setTimeout(() => {
+          if (codex && codex.exitCode === null) {
+            connected = false;
+            terminateCodex();
+          }
+        }, 250);
       }
     }
     if (message.method === "turn/diff/updated") reviewDiffs.record(message.params || {});

@@ -473,6 +473,7 @@ Object.assign(ZH_CN, {
   "Open verification page": "打开验证页面",
   "Starting sign-in…": "正在开始登录…",
   "Signed in to ChatGPT": "已登录 ChatGPT",
+  "Sign-in was not completed": "登录未完成",
   "Sign-in failed: {message}": "登录失败：{message}",
   "Sign-in could not start: {message}": "无法开始登录：{message}",
   "Code copied": "验证码已复制",

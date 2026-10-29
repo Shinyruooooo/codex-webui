@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- The sign-in dialog copies the device code with the fallback that also works on plain HTTP, where the native clipboard API is unavailable, and the copy button now reads "Copied" after a successful copy.
+- A finished sign-in now updates the interface even when the completion notification is missed. The open sign-in polls the sign-in state, so a suspended browser tab or a dropped bridge connection no longer leaves the dialog waiting with "not signed in". The bridge restarts after the notification was sent, so the browser sees the result before the restart.
+
 ## [0.9.1] - 2026-10-29
 
 ### Fixed
